@@ -1,0 +1,28 @@
+services:
+  # FastAPI Backend (gallery, processing, autofocus, platesolve, websocket status)
+  # Streamlit UI is managed by the main docker-compose.yml
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8503:8503"
+    network_mode: host
+    environment:
+      - TZ=America/New_York
+      - SEESTAR_IP=${SEESTAR_IP:-192.168.0.132}
+      - SEESTAR_PORT=${SEESTAR_PORT:-32323}
+      - DATA_DIR=/app/data
+      - SIRIL_CLI_PATH=siril-cli
+    volumes:
+      - ./captures:/app/captures
+      - seestar-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8503/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  seestar-data:

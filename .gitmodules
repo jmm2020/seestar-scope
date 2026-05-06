@@ -1,0 +1,3 @@
+[submodule "vendor/seestar_alp"]
+	path = vendor/seestar_alp
+	url = https://github.com/smart-underworld/seestar_alp.git

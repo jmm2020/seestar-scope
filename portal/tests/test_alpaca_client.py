@@ -1,0 +1,178 @@
+"""Tests for AlpacaClient - no live hardware required."""
+import sys
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from clients.alpaca_client import AlpacaClient, AlpacaResponse
+
+
+# --- AlpacaResponse tests ---
+
+def test_alpaca_response_success():
+    resp = AlpacaResponse(value=True, error_number=0)
+    assert resp.success is True
+
+
+def test_alpaca_response_failure():
+    resp = AlpacaResponse(error_number=1024, error_message="Not connected")
+    assert resp.success is False
+
+
+def test_alpaca_response_network_error():
+    resp = AlpacaResponse(error_number=-1, error_message="Connection refused")
+    assert resp.success is False
+
+
+def test_alpaca_response_default_values():
+    resp = AlpacaResponse()
+    assert resp.value is None
+    assert resp.error_number == 0
+    assert resp.success is True
+
+
+# --- AlpacaClient construction ---
+
+def test_client_default_construction():
+    client = AlpacaClient()
+    assert client.base_url == "http://192.168.0.132:32323/api/v1"
+    assert client.client_id == 1
+    assert client.timeout == 30
+
+
+def test_client_custom_construction():
+    client = AlpacaClient(host="10.0.0.1", port=11111, client_id=5, timeout=10)
+    assert client.base_url == "http://10.0.0.1:11111/api/v1"
+    assert client.client_id == 5
+    assert client.timeout == 10
+
+
+def test_client_devices_list():
+    assert AlpacaClient.DEVICES == ["telescope", "camera", "focuser", "filterwheel", "switch"]
+
+
+def test_transaction_id_increments():
+    client = AlpacaClient()
+    id1 = client._next_transaction_id()
+    id2 = client._next_transaction_id()
+    assert id2 == id1 + 1
+
+
+# --- Mocked HTTP tests ---
+
+def _mock_get_response(value, error_number=0, error_message=""):
+    """Create a mock requests.Response for GET."""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "Value": value,
+        "ErrorNumber": error_number,
+        "ErrorMessage": error_message,
+        "ServerTransactionID": 1,
+    }
+    return mock_resp
+
+
+def _mock_put_response(error_number=0, error_message=""):
+    """Create a mock requests.Response for PUT."""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "ErrorNumber": error_number,
+        "ErrorMessage": error_message,
+        "ServerTransactionID": 1,
+    }
+    return mock_resp
+
+
+def test_get_telescope_status():
+    client = AlpacaClient()
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.return_value = _mock_get_response(12.5)
+        result = client._get("telescope", 0, "rightascension")
+        assert result.success is True
+        assert result.value == 12.5
+
+
+def test_put_slew():
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_put_response()
+        result = client.slew_to(5.588, -5.391)
+        assert result.success is True
+        mock_put.assert_called_once()
+
+
+def test_connect_all_success():
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_put_response()
+        results = client.connect_all()
+        assert all(results.values())
+        assert len(results) == 5
+        assert mock_put.call_count == 5
+
+
+def test_connect_all_partial_failure():
+    client = AlpacaClient()
+    call_count = 0
+
+    def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 3:  # Focuser fails
+            return _mock_put_response(error_number=1024, error_message="Not connected")
+        return _mock_put_response()
+
+    with patch.object(client.session, "put", side_effect=side_effect):
+        results = client.connect_all()
+        assert results["telescope"] is True
+        assert results["camera"] is True
+        assert results["focuser"] is False
+        assert results["filterwheel"] is True
+        assert results["switch"] is True
+
+
+def test_get_network_error():
+    client = AlpacaClient()
+    import requests
+    with patch.object(client.session, "get", side_effect=requests.exceptions.ConnectionError("refused")):
+        result = client._get("telescope", 0, "rightascension")
+        assert result.success is False
+        assert "refused" in result.error_message
+
+
+def test_set_gain():
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_put_response()
+        result = client.set_gain(80)
+        assert result.success is True
+
+
+def test_is_image_ready_true():
+    client = AlpacaClient()
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.return_value = _mock_get_response(True)
+        assert client.is_image_ready() is True
+
+
+def test_is_image_ready_false():
+    client = AlpacaClient()
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.return_value = _mock_get_response(False)
+        assert client.is_image_ready() is False
+
+
+def test_get_dew_heater():
+    client = AlpacaClient()
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.return_value = _mock_get_response(1)
+        assert client.get_dew_heater() is True
+
+
+def test_set_dew_heater():
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_put_response()
+        result = client.set_dew_heater(True)
+        assert result.success is True
