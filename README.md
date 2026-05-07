@@ -69,10 +69,19 @@ streamlit run app.py --server.port 8502
 
 ## Quick Start — Jetson Deploy
 
-See `docs/architecture.md` for the Jetson Orin deployment playbook and
-`UCIS-v1/deployments/jetson/` for Dockerfiles and systemd units.
-See `docs/jetson_build_notes.md` for ARM64 build verification (dependency
-tables and `docker buildx` commands).
+```bash
+# From the seestar-scope repo root (or run standalone on the Jetson):
+bash deploy/jetson/setup.sh
+```
+
+The script is idempotent — safe to re-run. It installs Docker, clones the repo,
+configures `.env`, builds the ARM64 images, and installs the `seestar-stack` systemd service.
+
+See `deploy/jetson/README.md` for the full first-boot checklist, requirements, and troubleshooting.
+See `docs/jetson_build_notes.md` for ARM64 dependency verification and `docker buildx` build commands.
+
+When ready to cut over from workstation to Jetson, follow `docs/migration_runbook.md`
+(pre-flight checklist, `scripts/smoke_test.sh` validation, rollback procedure).
 
 ## Attribution
 

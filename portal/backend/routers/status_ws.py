@@ -6,7 +6,7 @@ Replaces SSE for modern real-time communication with heartbeat and reconnect sup
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 import asyncio
 import json
 import logging

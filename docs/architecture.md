@@ -87,14 +87,13 @@ Separate service in `UCIS-v1:src/services/seestar_enhance` — not checked into 
 
 Jetson Orin runs the portal + ALP backend (no GPU required for these two; seestar-enhance stays on workstation for now).
 
-Deployment artefacts live in `UCIS-v1:deployments/jetson/`:
-- `Dockerfile.jetson` — ARM64 build for portal
-- `docker-compose.jetson.yml`
-- systemd unit: `seestar.service`
+Deployment artefacts live in `deploy/jetson/` in this repo (generated from `UCIS-v1:projects/seestar-scope/deploy/jetson/`):
+- `setup.sh` — idempotent one-shot installer (Docker + clone + build + systemd)
+- `seestar-stack.service` — systemd unit; brings stack up at boot with `Restart=always`
+- `.env.example` — Jetson-specific environment defaults (SEESTAR_IP=192.168.0.132)
+- `README.md` — first-boot checklist, disk requirements, and troubleshooting
 
-See `docs/jetson_build_notes.md` for ARM64 dependency verification and `docker buildx` build commands.
-
-Access via Tailscale / Cloudflare Tunnel — no open ports on LAN required.
+See `deploy/jetson/README.md` for the full first-boot procedure.
 
 ## Data Flow — Capture Session
 

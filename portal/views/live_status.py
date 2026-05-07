@@ -4,15 +4,18 @@ Displays live status from ALPACA client with auto-refresh.
 Shows telescope position (RA/Dec, Alt/Az), camera state/temperature, focuser position.
 Updates every 2 seconds using st.rerun() for real-time monitoring.
 """
+import os
 import streamlit as st
 import requests
+from datetime import datetime
+from typing import Dict, Any, Optional
 import logging
 import time
 
 logger = logging.getLogger(__name__)
 
 # Backend API base URL
-BACKEND_URL = "http://localhost:8503"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://seestar-portal-backend:8503")
 
 
 def render_live_status(alpaca):
@@ -21,8 +24,9 @@ def render_live_status(alpaca):
     st.markdown("Real-time telescope, camera, and focuser monitoring with auto-refresh")
 
     # Check backend connectivity
-    if not check_backend_health():
-        st.warning("⚠️ Backend API is not reachable at localhost:8503. Live WebSocket connection count unavailable.")
+    backend_healthy = check_backend_health()
+    if not backend_healthy:
+        st.warning(f"⚠️ Backend API is not reachable at {BACKEND_URL}. Live WebSocket connection count unavailable.")
 
     # Auto-refresh controls
     col1, col2 = st.columns([3, 1])
@@ -30,7 +34,7 @@ def render_live_status(alpaca):
         st.markdown("**Auto-refresh every 2 seconds** — live data from ALPACA client")
     with col2:
         # Show WebSocket connection count if backend available
-        if check_backend_health():
+        if backend_healthy:
             try:
                 response = requests.get(f"{BACKEND_URL}/api/status/connections", timeout=2)
                 if response.status_code == 200:
@@ -62,14 +66,13 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except Exception:
+    except:
         return False
 
 
 def render_telescope_status(alpaca, container):
     """Display real-time telescope position and state."""
     try:
-        # Get telescope status from ALPACA client
         status = alpaca.get_telescope_status()
 
         with container.container():
@@ -138,7 +141,6 @@ def render_telescope_status(alpaca, container):
 def render_camera_status(alpaca, container):
     """Display real-time camera state and temperature."""
     try:
-        # Get camera status from ALPACA client
         status = alpaca.get_camera_status()
 
         with container.container():
@@ -187,7 +189,6 @@ def render_camera_status(alpaca, container):
 def render_focuser_status(alpaca, container):
     """Display real-time focuser position and movement state."""
     try:
-        # Get focuser status from ALPACA client
         status = alpaca.get_focuser_status()
 
         with container.container():

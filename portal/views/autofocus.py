@@ -1,11 +1,13 @@
 """Auto-Focus View — V-Curve Autofocus Control
 
 Streamlit interface for V-curve autofocus with HFR metric.
-Calls FastAPI backend at localhost:8503/api/autofocus/*.
+Calls FastAPI backend at BACKEND_URL/api/autofocus/*.
 """
+import os
 import streamlit as st
 import requests
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any
 import pandas as pd
 import plotly.graph_objects as go
@@ -13,7 +15,7 @@ import plotly.graph_objects as go
 logger = logging.getLogger(__name__)
 
 # Backend API base URL
-BACKEND_URL = "http://localhost:8503"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://seestar-portal-backend:8503")
 
 
 def render_autofocus(alpaca):
@@ -27,7 +29,7 @@ def render_autofocus(alpaca):
     
     # Check backend connectivity
     if not check_backend_health():
-        st.error("⚠️ Backend API is not reachable at localhost:8503. Start the FastAPI backend first.")
+        st.error(f"⚠️ Backend API is not reachable at {BACKEND_URL}. Start the FastAPI backend first.")
         st.code("cd backend && uvicorn main:app --host 0.0.0.0 --port 8503", language="bash")
         return
     
@@ -69,7 +71,7 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except Exception:
+    except:
         return False
 
 
@@ -79,9 +81,8 @@ def get_autofocus_status() -> Optional[Dict[str, Any]]:
         response = requests.get(f"{BACKEND_URL}/api/autofocus/status", timeout=5)
         if response.status_code == 200:
             return response.json()
-        else:
-            logger.error(f"Failed to get autofocus status: {response.status_code}")
-            return None
+        logger.error(f"Failed to get autofocus status: {response.status_code}")
+        return None
     except Exception as e:
         logger.error(f"Error getting autofocus status: {e}")
         return None
@@ -93,9 +94,8 @@ def get_default_config() -> Optional[Dict[str, Any]]:
         response = requests.get(f"{BACKEND_URL}/api/autofocus/config", timeout=5)
         if response.status_code == 200:
             return response.json()
-        else:
-            logger.error(f"Failed to get default config: {response.status_code}")
-            return None
+        logger.error(f"Failed to get default config: {response.status_code}")
+        return None
     except Exception as e:
         logger.error(f"Error getting default config: {e}")
         return None
@@ -199,7 +199,6 @@ def render_config_panel(is_running: bool):
                 disabled=is_running
             )
         
-        # Update session state
         st.session_state.autofocus_config = {
             'exposure_time': exposure,
             'gain': gain,
@@ -221,14 +220,12 @@ def render_control_buttons(is_running: bool):
     col1, col2, col3 = st.columns([1, 1, 2])
     
     with col1:
-        start_disabled = is_running
-        if st.button("▶️ Start Autofocus", disabled=start_disabled, use_container_width=True, type="primary"):
+        if st.button("▶️ Start Autofocus", disabled=is_running, use_container_width=True, type="primary"):
             config = st.session_state.autofocus_config
             start_autofocus(config)
-    
+
     with col2:
-        abort_disabled = not is_running
-        if st.button("⏹️ Abort", disabled=abort_disabled, use_container_width=True):
+        if st.button("⏹️ Abort", disabled=not is_running, use_container_width=True):
             abort_autofocus()
     
     with col3:

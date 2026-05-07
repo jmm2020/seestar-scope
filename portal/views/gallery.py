@@ -1,18 +1,19 @@
 """Gallery View - Browse captured images with filtering
 
-Displays image gallery from FastAPI backend (localhost:8503).
+Displays image gallery from FastAPI backend (seestar-portal-backend:8503).
 Shows thumbnails, metadata, filtering controls, and processing status.
 """
+import os
 import streamlit as st
 import requests
-from datetime import datetime
-from typing import List, Dict, Any
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
 # Backend API base URL
-BACKEND_URL = "http://localhost:8503"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://seestar-portal-backend:8503")
 
 
 def render_gallery():
@@ -22,7 +23,7 @@ def render_gallery():
     
     # Check backend connectivity
     if not check_backend_health():
-        st.error("⚠️ Backend API is not reachable at localhost:8503. Start the FastAPI backend first.")
+        st.error(f"⚠️ Backend API is not reachable at {BACKEND_URL}. Start the FastAPI backend first.")
         st.code("cd backend && uvicorn main:app --host 0.0.0.0 --port 8503", language="bash")
         return
     
@@ -34,9 +35,9 @@ def render_gallery():
     # Filter controls
     with st.expander("🔍 Filter Options", expanded=False):
         filters = render_filter_controls()
-    
+
     # Fetch and display images
-    images = fetch_images(filters if 'filters' in locals() else {})
+    images = fetch_images(filters)
     
     if not images:
         st.info("No images found. Capture some images first using the Imaging or Sequence pages.")
@@ -51,7 +52,7 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except Exception:
+    except:
         return False
 
 
@@ -174,12 +175,9 @@ def render_image_grid(images: List[Dict[str, Any]]):
     """Render images in a responsive grid."""
     st.markdown(f"### Showing {len(images)} images")
     
-    # Grid layout: 3 columns
-    cols_per_row = 3
-    
-    for idx in range(0, len(images), cols_per_row):
-        cols = st.columns(cols_per_row)
-        
+    for idx in range(0, len(images), 3):
+        cols = st.columns(3)
+
         for col_idx, col in enumerate(cols):
             img_idx = idx + col_idx
             if img_idx < len(images):
@@ -195,7 +193,7 @@ def render_image_card(image: Dict[str, Any]):
         
         try:
             st.image(thumbnail_url, use_container_width=True)
-        except Exception:
+        except:
             st.error("Failed to load thumbnail")
         
         # Metadata
@@ -266,5 +264,5 @@ def format_timestamp(timestamp_str: str) -> str:
     try:
         dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
         return dt.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
+    except:
         return timestamp_str

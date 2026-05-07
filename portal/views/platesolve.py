@@ -3,17 +3,18 @@
 Provides blind and hint-based plate solving to verify telescope pointing accuracy.
 Shows solved RA/Dec, field rotation, pixel scale, and offset from expected position.
 """
+import os
 import streamlit as st
 import requests
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Backend API base URL
-BACKEND_URL = "http://localhost:8503"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://seestar-portal-backend:8503")
 
 
 def render_platesolve():
@@ -23,12 +24,11 @@ def render_platesolve():
     
     # Check backend connectivity
     if not check_backend_health():
-        st.error("⚠️ Backend API is not reachable at localhost:8503. Start the FastAPI backend first.")
+        st.error(f"⚠️ Backend API is not reachable at {BACKEND_URL}. Start the FastAPI backend first.")
         st.code("cd backend && uvicorn main:app --host 0.0.0.0 --port 8503", language="bash")
         return
     
-    # Two-column layout
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns(2)
     
     with col1:
         render_solve_controls()
@@ -42,7 +42,7 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except Exception:
+    except:
         return False
 
 
@@ -310,7 +310,8 @@ def display_solve_result(result: Dict[str, Any]):
                 st.markdown("### 🎯 Pointing Accuracy")
                 
                 offset_arcsec = result['offset_arcsec']
-
+                offset_color = "green" if offset_arcsec < 30 else "orange" if offset_arcsec < 60 else "red"
+                
                 col_offset1, col_offset2, col_offset3 = st.columns(3)
                 
                 with col_offset1:
@@ -399,7 +400,7 @@ def render_session_card(session_id: str):
             timestamp = result.get('timestamp')
             
             # Status icon
-            status_icon = "✅" if status == "success" else "❌" if status == "failed" else "⏱️"
+            status_icon = {"success": "✅", "failed": "❌"}.get(status, "⏱️")
             mode_badge = "🎯 Hint" if mode == "hint" else "🌌 Blind"
             
             with st.expander(f"{status_icon} {session_id[:12]}... • {mode_badge} • {format_timestamp(timestamp)}"):
@@ -463,5 +464,5 @@ def format_timestamp(timestamp_str: str) -> str:
     try:
         dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
         return dt.strftime("%m/%d %H:%M:%S")
-    except Exception:
+    except:
         return timestamp_str[:16] if timestamp_str else ""

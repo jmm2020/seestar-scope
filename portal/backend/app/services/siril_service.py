@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -312,7 +313,7 @@ class SirilService:
             if not f.exists():
                 logger.error(f"FITS file not found: {f}")
                 return False
-            if f.suffix.lower() not in ['.fits', '.fit', '.fts']:
+            if not f.suffix.lower() in ['.fits', '.fit', '.fts']:
                 logger.error(f"Not a FITS file: {f}")
                 return False
         return True
