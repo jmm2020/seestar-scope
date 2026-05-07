@@ -6,10 +6,9 @@ Provides singleton instances for the backend to use.
 import sys
 from pathlib import Path
 
-# Add project root to path to import existing clients
-# backend/ is inside seestar_scope/, so parent is seestar_scope/
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# Add existing_codebase to path to import clients
+existing_code_path = Path(__file__).parent.parent / "existing_codebase"
+sys.path.insert(0, str(existing_code_path))
 
 from clients.alpaca_client import AlpacaClient
 from clients.stellarium_client import StellariumClient

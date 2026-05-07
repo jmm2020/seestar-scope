@@ -54,7 +54,10 @@ async def get_telescope_status(request: Request):
     alpaca = request.app.state.alpaca
     try:
         status = alpaca.get_telescope_status()
-        return {"success": True, "data": status}
+        return {
+            "success": True,
+            "data": status
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -291,7 +294,11 @@ async def get_stellarium_status(request: Request):
     try:
         available = stellarium.is_available()
         status = stellarium.get_status() if available else None
-        return {"success": True, "available": available, "status": status}
+        return {
+            "success": True,
+            "available": available,
+            "status": status
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -330,8 +337,10 @@ async def slew_to_stellarium_object(request: Request):
         obj = stellarium.get_selected_object()
         if not obj:
             raise HTTPException(status_code=400, detail="No object selected in Stellarium")
+        
         if not obj.above_horizon:
             raise HTTPException(status_code=400, detail=f"{obj.name} is below horizon")
+        
         resp = alpaca.slew_to(obj.ra_j2000_hours, obj.dec_j2000_degrees)
         if resp.success:
             return {

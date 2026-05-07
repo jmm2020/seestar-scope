@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install portal dependencies
+        run: |
+          pip install -r portal/requirements.txt
+          pip install -r portal/requirements-dev.txt
+
+      - name: Lint portal code
+        run: ruff check portal/
+
+      - name: Build Docker images
+        env:
+          # Build-time ARG stubs — CI doesn't connect to hardware; values satisfy Dockerfile ARG declarations
+          SEESTAR_IP: "192.168.4.1"
+          SEESTAR_PORT: "11111"
+          TZ: "America/New_York"
+          BACKEND_URL: "http://seestar-portal-backend:8503"
+        run: docker compose build
+
+      - name: Run portal tests
+        env:
+          PYTHONPATH: .
+        run: pytest portal/tests/ -m "not hardware" -v

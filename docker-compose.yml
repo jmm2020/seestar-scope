@@ -1,0 +1,84 @@
+services:
+  seestar-alp:
+    build:
+      context: vendor/seestar_alp
+      dockerfile: docker/Dockerfile
+    container_name: seestar-alp
+    restart: unless-stopped
+    networks:
+      - seestar-net
+    environment:
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - captures-data:/home/seestar/seestar_alp/captures
+      - sessions-data:/home/seestar/seestar_alp/sessions
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/api/v1/management/apiversions"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  seestar-portal-backend:
+    build:
+      context: portal
+      dockerfile: backend/Dockerfile
+    container_name: seestar-portal-backend
+    restart: unless-stopped
+    networks:
+      - seestar-net
+    ports:
+      - "8503:8503"
+    environment:
+      - TZ=${TZ:-America/New_York}
+      - SEESTAR_IP=${SEESTAR_IP:-192.168.4.1}
+      - SEESTAR_PORT=${SEESTAR_PORT:-11111}
+      - ALP_HOST=seestar-alp
+      - ALP_PORT=5555
+      - DATA_DIR=/app/data
+    volumes:
+      - captures-data:/app/captures
+      - gallery-db:/app/data
+    depends_on:
+      seestar-alp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8503/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  seestar-portal-ui:
+    build:
+      context: portal
+      dockerfile: Dockerfile
+    container_name: seestar-portal-ui
+    restart: unless-stopped
+    networks:
+      - seestar-net
+    ports:
+      - "8502:8502"
+    environment:
+      - TZ=${TZ:-America/New_York}
+      - BACKEND_URL=${BACKEND_URL:-http://seestar-portal-backend:8503}
+    volumes:
+      - sessions-data:/app/sessions
+    depends_on:
+      seestar-portal-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8502/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  seestar-net:
+    driver: bridge
+
+volumes:
+  captures-data:
+  sessions-data:
+  gallery-db:

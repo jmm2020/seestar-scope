@@ -6,4 +6,3 @@ Pillow>=10.0.0
 astropy>=6.0.0
 toml>=0.10.2
 plotly>=5.18.0
-pandas>=2.0.0

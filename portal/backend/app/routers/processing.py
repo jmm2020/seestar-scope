@@ -29,7 +29,7 @@ import json
 from datetime import datetime
 import httpx
 
-from backend.app.services.siril_service import SirilService, ProcessingStatus, ProcessingResult
+from app.services.siril_service import SirilService, ProcessingStatus, ProcessingResult
 
 router = APIRouter(prefix="/api/processing", tags=["processing"])
 

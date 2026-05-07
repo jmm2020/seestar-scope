@@ -12,17 +12,17 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from backend.models.gallery import (
+from ..models.gallery import (
     GalleryDatabase,
     GalleryFilter,
     ImageRecord,
     GalleryStats
 )
-from backend.database import get_db
+from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/api/gallery", tags=["gallery"])
 
 
 @router.get("/", response_model=List[ImageRecord])
@@ -40,8 +40,17 @@ async def list_images(
     offset: int = Query(0, ge=0, description="Pagination offset"),
     db: GalleryDatabase = Depends(get_db)
 ):
-    """List images with flexible filtering."""
+    """
+    List images with flexible filtering.
+    
+    Examples:
+    - GET /api/gallery/?target=M31&limit=10
+    - GET /api/gallery/?session_id=20260302_143052
+    - GET /api/gallery/?processed_only=true&filter=Ha
+    - GET /api/gallery/?start_date=2026-03-01T00:00:00Z&end_date=2026-03-02T23:59:59Z
+    """
     try:
+        # Build filter criteria
         filter_criteria = GalleryFilter(
             target=target,
             session_id=session_id,
@@ -55,9 +64,11 @@ async def list_images(
             limit=limit,
             offset=offset
         )
+        
         records = db.search(filter_criteria)
         logger.info(f"Gallery query returned {len(records)} images")
         return records
+        
     except Exception as e:
         logger.error(f"Gallery search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -65,11 +76,21 @@ async def list_images(
 
 @router.get("/stats", response_model=GalleryStats)
 async def get_gallery_stats(db: GalleryDatabase = Depends(get_db)):
-    """Get gallery statistics summary."""
+    """
+    Get gallery statistics summary.
+    
+    Returns:
+    - Total images/sessions
+    - Target/filter breakdown
+    - Total exposure hours
+    - Date range
+    - Processing counts
+    """
     try:
         stats = db.get_stats()
         logger.info(f"Gallery stats: {stats.total_images} images, {stats.total_sessions} sessions")
         return stats
+        
     except Exception as e:
         logger.error(f"Failed to get gallery stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -77,14 +98,24 @@ async def get_gallery_stats(db: GalleryDatabase = Depends(get_db)):
 
 @router.get("/{image_id}", response_model=ImageRecord)
 async def get_image_detail(image_id: int, db: GalleryDatabase = Depends(get_db)):
-    """Get full details for a specific image."""
+    """
+    Get full details for a specific image.
+    
+    Returns ImageRecord with all metadata, tags, notes, processing status.
+    """
     try:
-        filter_criteria = GalleryFilter(limit=1000, offset=0)
+        # Use search with no filters to get single record
+        filter_criteria = GalleryFilter(limit=1000, offset=0)  # Broader search
         records = db.search(filter_criteria)
+        
+        # Filter by ID
         matching = [r for r in records if r.id == image_id]
+        
         if not matching:
             raise HTTPException(status_code=404, detail=f"Image {image_id} not found")
+        
         return matching[0]
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -98,22 +129,38 @@ async def get_thumbnail(
     size: int = Query(256, ge=64, le=1024),
     db: GalleryDatabase = Depends(get_db)
 ):
-    """Serve thumbnail for an image."""
+    """
+    Serve thumbnail for an image.
+    
+    Returns the PNG preview (scaled if size < original).
+    For now, returns full PNG - future enhancement can add resize.
+    
+    Query params:
+    - size: Thumbnail size in pixels (default 256)
+    """
     try:
+        # Get image record to find PNG path
         filter_criteria = GalleryFilter(limit=1000, offset=0)
         records = db.search(filter_criteria)
         matching = [r for r in records if r.id == image_id]
+        
         if not matching:
             raise HTTPException(status_code=404, detail=f"Image {image_id} not found")
+        
         record = matching[0]
         png_path = Path(record.png_path)
+        
         if not png_path.exists():
             raise HTTPException(status_code=404, detail=f"PNG file not found: {record.png_path}")
+        
+        # Serve PNG directly
+        # TODO: Add image resize logic if size < original dimensions
         return FileResponse(
             path=str(png_path),
             media_type="image/png",
             headers={"Cache-Control": "public, max-age=3600"}
         )
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -127,10 +174,15 @@ async def add_tags(
     tags: List[str],
     db: GalleryDatabase = Depends(get_db)
 ):
-    """Add tags to an image (merges with existing tags)."""
+    """
+    Add tags to an image (merges with existing tags).
+    
+    Request body: ["nebula", "narrowband", "featured"]
+    """
     try:
         db.add_tags(image_id, tags)
         return {"status": "success", "image_id": image_id, "tags": tags}
+        
     except Exception as e:
         logger.error(f"Failed to add tags to image {image_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

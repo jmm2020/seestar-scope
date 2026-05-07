@@ -4,13 +4,16 @@
 
 ## Overview
 
-Two-stack design:
+Three-service bridge-network design (unified `docker-compose.yml` at repo root):
 
-| Stack | Source | Host |
-|-------|--------|------|
-| **Portal** (Streamlit UI) | `portal/` in this repo | Workstation / Docker |
-| **ALP backend** | `vendor/seestar_alp` (submodule, pinned `7bed951`) | Workstation / Docker |
-| **seestar-enhance** | `UCIS-v1:src/services/seestar_enhance` | Workstation (GPU) |
+| Service | Source | Container Name | Port |
+|---------|--------|----------------|------|
+| **seestar-portal-ui** (Streamlit UI) | `portal/` in this repo | `seestar-portal-ui` | :8502 |
+| **seestar-portal-backend** (FastAPI) | `portal/backend/` | `seestar-portal-backend` | :8503 (internal) |
+| **seestar-alp** (ALP backend) | `vendor/seestar_alp` (submodule, pinned `7bed951`) | `seestar-alp` | :5555 (internal) |
+| **seestar-enhance** | `UCIS-v1:src/services/seestar_enhance` | separate service | :8504 |
+
+All three Docker services share the `seestar-net` bridge network. Only the UI (`:8502`) is published to the host.
 
 ## Network Topology
 
@@ -18,15 +21,18 @@ Two-stack design:
 LAN (192.168.0.x)
   │
   ├── Workstation (or Jetson Orin)
-  │     ├── portal           →  :8502  (Streamlit)
-  │     ├── ALP backend      →  :8503  (FastAPI / ASCOM ALPACA)
-  │     └── seestar-enhance  →  :8504  (FastAPI + CUDA — GraXpert + StarNet++)
+  │     └── Docker bridge: seestar-net
+  │           ├── seestar-portal-ui      → host:8502  (Streamlit)
+  │           ├── seestar-portal-backend → :8503      (FastAPI — internal only)
+  │           └── seestar-alp            → :5555      (ALPACA — internal only)
+  │     └── seestar-enhance  →  host:8504  (FastAPI + CUDA — separate service)
   │
   └── Seestar S50
         └── 192.168.0.132:32323  (proprietary TCP)
 ```
 
-The portal talks **only** to the ALP backend via ASCOM ALPACA REST.
+The portal UI talks to the portal backend via `http://seestar-portal-backend:8503` (container DNS).
+The portal backend talks to `seestar-alp` via `http://seestar-alp:5555` (ASCOM ALPACA).
 The ALP backend talks to the S50 directly via TCP.
 `seestar-enhance` is a standalone service called by the portal for post-stack processing.
 
@@ -38,8 +44,7 @@ The ALP backend talks to the S50 directly via TCP.
 | `config.toml` | Runtime config (S50 IP, ports, imaging defaults) |
 | `config_loader.py` | TOML config loader with env-var overrides |
 | `requirements.txt` | Python dependencies |
-| `Dockerfile` | Container build |
-| `docker-compose.yml` | Workstation compose |
+| `Dockerfile` | Container build (used by `seestar-portal-ui` service) |
 | `clients/alpaca_client.py` | ASCOM ALPACA REST client (telescope, camera, focuser, filter, switch) |
 | `clients/stellarium_client.py` | Stellarium Remote Control client |
 | `views/dashboard.py` | Live status — 2 s auto-refresh |
@@ -87,6 +92,8 @@ Deployment artefacts live in `UCIS-v1:deployments/jetson/`:
 - `docker-compose.jetson.yml`
 - systemd unit: `seestar.service`
 
+See `docs/jetson_build_notes.md` for ARM64 dependency verification and `docker buildx` build commands.
+
 Access via Tailscale / Cloudflare Tunnel — no open ports on LAN required.
 
 ## Data Flow — Capture Session
@@ -121,6 +128,37 @@ seestar-enhance (GraXpert → StarNet++)
   ▼
 portal (display)
 ```
+
+## CI Setup
+
+GitHub Actions CI runs on every push/PR to `main` via `.github/workflows/ci.yml`.
+
+**Pipeline steps:**
+
+| Step | Command | What it checks |
+|------|---------|----------------|
+| Lint | `ruff check portal/` | Code quality (portal only — vendor code excluded) |
+| Build | `docker compose build` | All three Docker images build on linux/amd64 |
+| Test | `pytest portal/tests/ -m "not hardware"` | Unit tests pass (hardware-dependent tests skipped) |
+
+**One-time setup (run from the seestar-scope repo root):**
+
+```bash
+# 1. Create private repo and push
+gh repo create jmm2020/seestar-scope --private --source . --push
+
+# 2. Enable branch protection (after first CI run is green)
+gh api repos/jmm2020/seestar-scope/branches/main/protection \
+  --method PUT \
+  -H "Accept: application/vnd.github+json" \
+  -F "required_status_checks[strict]=true" \
+  -f "required_status_checks[contexts][]=ci" \
+  -F "enforce_admins=false" \
+  -F "required_pull_request_reviews=null" \
+  -F "restrictions=null"
+```
+
+After branch protection is enabled, direct pushes to `main` are blocked — all changes must go through a PR with passing CI.
 
 ## Ports Summary
 

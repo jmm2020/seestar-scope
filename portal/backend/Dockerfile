@@ -10,19 +10,17 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy requirements first (for caching)
-COPY backend/requirements.txt ./backend/
-RUN pip install --no-cache-dir -r backend/requirements.txt
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
+# Copy backend code (preserving backend/ directory structure)
 COPY backend /app/backend
 
-# Copy existing client code (needed by backend/clients.py)
-COPY clients /app/clients
-COPY config_loader.py /app/
-COPY config.toml /app/
+# Copy existing_codebase for client imports
+COPY existing_codebase /app/existing_codebase
 
 # Create data directories
-RUN mkdir -p /app/data /app/captures
+RUN mkdir -p /app/data /app/captures /app/siril_workdir
 
 # Expose backend port
 EXPOSE 8503

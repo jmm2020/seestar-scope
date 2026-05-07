@@ -30,6 +30,26 @@ Browser
 | ALP backend | 8503 | ASCOM ALPACA proxy to S50 |
 | seestar-enhance | 8504 | AI post-stack (GraXpert + StarNet++) — UCIS-v1 service |
 
+## Quick Start — Docker Compose
+
+```bash
+# Clone with submodule
+git clone --recurse-submodules git@github.com:jmm2020/seestar-scope.git
+cd seestar-scope
+
+# Configure environment
+cp .env.example .env
+# Edit .env: set SEESTAR_IP to your S50's IP address
+
+# Build and start all services
+docker compose build
+docker compose up -d
+
+# Portal UI is available at http://localhost:8502
+# View logs:
+docker compose logs -f
+```
+
 ## Quick Start — Workstation Dev
 
 ```bash
@@ -51,6 +71,8 @@ streamlit run app.py --server.port 8502
 
 See `docs/architecture.md` for the Jetson Orin deployment playbook and
 `UCIS-v1/deployments/jetson/` for Dockerfiles and systemd units.
+See `docs/jetson_build_notes.md` for ARM64 build verification (dependency
+tables and `docker buildx` commands).
 
 ## Attribution
 

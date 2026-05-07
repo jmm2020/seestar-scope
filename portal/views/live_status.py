@@ -54,18 +54,9 @@ def render_live_status(alpaca):
     render_camera_status(alpaca, camera_container)
     render_focuser_status(alpaca, focuser_container)
 
-    # Auto-refresh controls
-    st.divider()
-    col_refresh, col_auto = st.columns([1, 3])
-    with col_refresh:
-        if st.button("Refresh Now", use_container_width=True):
-            st.rerun()
-    with col_auto:
-        auto_refresh = st.checkbox("Auto-refresh (2s)", value=False,
-                                    help="Enable automatic refresh every 2 seconds")
-    if auto_refresh:
-        time.sleep(2)
-        st.rerun()
+    # Auto-refresh trigger
+    time.sleep(2)
+    st.rerun()
 
 
 def check_backend_health() -> bool:
@@ -86,14 +77,18 @@ def render_telescope_status(alpaca, container):
         with container.container():
             st.markdown("### 🔭 Telescope")
 
-            # If we got here, the ALPACA calls succeeded — telescope is connected
+            if not status.get("connected", False):
+                st.error("❌ Telescope not connected")
+                return
+
             # Position metrics
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
                 ra = status.get("ra")
                 if ra is not None:
-                    st.metric("RA", f"{ra:.4f}h")
+                    ra_hours = ra / 15.0  # Convert degrees to hours
+                    st.metric("RA", f"{ra_hours:.4f}h")
                 else:
                     st.metric("RA", "N/A")
 

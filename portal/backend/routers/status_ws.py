@@ -2,10 +2,11 @@
 
 Provides real-time bidirectional status updates via WebSocket.
 Broadcasts telescope position, tracking state, and processing job status to all connected clients.
+Replaces SSE for modern real-time communication with heartbeat and reconnect support.
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 import asyncio
 import json
 import logging
@@ -14,7 +15,7 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/api/status", tags=["status"])
 
 
 class MessageType(str, Enum):
@@ -40,7 +41,10 @@ class ConnectionManager:
         async with self._lock:
             self.active_connections.add(websocket)
             self.client_queues[websocket] = asyncio.Queue()
+
         logger.info(f"WebSocket client connected. Total clients: {len(self.active_connections)}")
+
+        # Send welcome message
         await self.send_personal_message({
             "type": MessageType.CONNECTED,
             "timestamp": datetime.utcnow().isoformat(),
@@ -52,6 +56,7 @@ class ConnectionManager:
         async with self._lock:
             self.active_connections.discard(websocket)
             self.client_queues.pop(websocket, None)
+
         logger.info(f"WebSocket client disconnected. Total clients: {len(self.active_connections)}")
 
     async def send_personal_message(self, message: dict, websocket: WebSocket) -> None:
@@ -66,6 +71,8 @@ class ConnectionManager:
         """Broadcast message to all connected clients"""
         if not self.active_connections:
             return
+
+        # Add message to all client queues
         async with self._lock:
             for queue in self.client_queues.values():
                 try:
@@ -78,6 +85,7 @@ class ConnectionManager:
         queue = self.client_queues.get(websocket)
         if not queue:
             return
+
         try:
             while websocket in self.active_connections:
                 message = await queue.get()
@@ -97,11 +105,15 @@ manager = ConnectionManager()
 async def telescope_status_broadcaster(request: Request) -> None:
     """Background task: poll telescope status and broadcast to all clients"""
     alpaca = request.app.state.alpaca
+
     while True:
         try:
+            # Poll telescope status
             telescope_status = alpaca.get_telescope_status()
             camera_status = alpaca.get_camera_status()
             focuser_status = alpaca.get_focuser_status()
+
+            # Build status message
             message = {
                 "type": MessageType.TELESCOPE_STATUS,
                 "timestamp": datetime.utcnow().isoformat(),
@@ -129,25 +141,37 @@ async def telescope_status_broadcaster(request: Request) -> None:
                     }
                 }
             }
+
+            # Broadcast to all clients
             await manager.broadcast(message)
+
         except Exception as e:
             logger.error(f"Telescope status broadcast error: {e}")
+            # Broadcast error to clients
             await manager.broadcast({
                 "type": MessageType.ERROR,
                 "timestamp": datetime.utcnow().isoformat(),
                 "error": str(e)
             })
+
+        # Poll every 2 seconds
         await asyncio.sleep(2.0)
 
 
 async def processing_status_broadcaster(request: Request) -> None:
     """Background task: broadcast processing job status updates"""
+    # Import here to avoid circular dependency
     from backend.routers.processing import processing_tasks
+
     last_states: Dict[str, str] = {}
+
     while True:
         try:
+            # Check for processing status changes
             for session_id, result in processing_tasks.items():
                 current_state = result.status.value
+
+                # Only broadcast if state changed
                 if last_states.get(session_id) != current_state:
                     message = {
                         "type": MessageType.PROCESSING_STATUS,
@@ -161,17 +185,22 @@ async def processing_status_broadcaster(request: Request) -> None:
                             "stats": result.stats
                         }
                     }
+
                     await manager.broadcast(message)
                     last_states[session_id] = current_state
+
         except Exception as e:
             logger.error(f"Processing status broadcast error: {e}")
+
+        # Check every 1 second (faster than telescope polling)
         await asyncio.sleep(1.0)
 
 
 async def heartbeat_sender() -> None:
     """Background task: send periodic heartbeat to detect dead connections"""
     while True:
-        await asyncio.sleep(30.0)
+        await asyncio.sleep(30.0)  # Heartbeat every 30 seconds
+
         try:
             await manager.broadcast({
                 "type": MessageType.HEARTBEAT,
@@ -183,50 +212,144 @@ async def heartbeat_sender() -> None:
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, request: Request):
-    """WebSocket endpoint for real-time status updates.
-
-    Connection URL: ws://localhost:8503/api/status/ws
-
-    Message types: telescope_status (2s), processing_status (on change),
-    heartbeat (30s), error, connected.
     """
+    WebSocket endpoint for real-time status updates.
+
+    **Connection URL:** ws://192.168.0.148:8503/api/status/ws
+
+    **Message Types:**
+    - `telescope_status`: Real-time telescope position, tracking, slewing state (every 2s)
+    - `processing_status`: Processing job status updates (pushed on state change)
+    - `heartbeat`: Connection health check (every 30s)
+    - `error`: Error notifications
+    - `connected`: Welcome message on connection
+
+    **Client Example (JavaScript):**
+    ```javascript
+    const ws = new WebSocket('ws://192.168.0.148:8503/api/status/ws');
+
+    ws.onopen = () => {
+        console.log('Connected to Seestar status stream');
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        switch(msg.type) {
+            case 'telescope_status':
+                console.log('Telescope:', msg.data.telescope);
+                updateTelescopeUI(msg.data);
+                break;
+            case 'processing_status':
+                console.log('Processing:', msg.data.status);
+                updateProcessingUI(msg.data);
+                break;
+            case 'heartbeat':
+                console.log('Heartbeat:', msg.timestamp);
+                break;
+            case 'error':
+                console.error('Error:', msg.error);
+                break;
+        }
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+        console.log('Disconnected. Reconnecting in 5s...');
+        setTimeout(() => location.reload(), 5000);
+    };
+    ```
+
+    **Client Example (Python):**
+    ```python
+    import websocket
+    import json
+
+    def on_message(ws, message):
+        msg = json.loads(message)
+        print(f"{msg['type']}: {msg.get('data', msg.get('message', ''))}")
+
+    def on_error(ws, error):
+        print(f"Error: {error}")
+
+    def on_close(ws, close_status_code, close_msg):
+        print("Connection closed")
+
+    def on_open(ws):
+        print("Connected to Seestar status stream")
+
+    ws = websocket.WebSocketApp(
+        "ws://192.168.0.148:8503/api/status/ws",
+        on_open=on_open,
+        on_message=on_message,
+        on_error=on_error,
+        on_close=on_close
+    )
+
+    ws.run_forever()
+    ```
+
+    **Reconnect Strategy:**
+    Client should implement exponential backoff on disconnect:
+    - First retry: 1s
+    - Second retry: 2s
+    - Third retry: 4s
+    - Max retry: 30s
+    """
+    # Accept connection
     await manager.connect(websocket)
 
     # Start background tasks if not already running
     if not hasattr(request.app.state, "_ws_tasks_started"):
         request.app.state._ws_tasks_started = True
+
+        # Launch broadcaster tasks
         asyncio.create_task(telescope_status_broadcaster(request))
         asyncio.create_task(processing_status_broadcaster(request))
         asyncio.create_task(heartbeat_sender())
+
         logger.info("WebSocket background tasks started")
 
+    # Start client sender task
     sender_task = asyncio.create_task(manager.client_sender(websocket))
 
     try:
+        # Listen for client messages (bidirectional communication)
         while True:
             data = await websocket.receive_text()
+
             try:
                 message = json.loads(data)
+
+                # Handle client commands
                 if message.get("command") == "ping":
                     await manager.send_personal_message({
                         "type": "pong",
                         "timestamp": datetime.utcnow().isoformat()
                     }, websocket)
+
                 elif message.get("command") == "subscribe":
+                    # Future enhancement: selective subscription
                     await manager.send_personal_message({
                         "type": "subscribed",
                         "channels": message.get("channels", ["all"])
                     }, websocket)
+
                 else:
                     await manager.send_personal_message({
                         "type": MessageType.ERROR,
                         "error": f"Unknown command: {message.get('command')}"
                     }, websocket)
+
             except json.JSONDecodeError:
                 await manager.send_personal_message({
                     "type": MessageType.ERROR,
                     "error": "Invalid JSON"
                 }, websocket)
+
     except WebSocketDisconnect:
         logger.info("Client disconnected normally")
     except Exception as e:
@@ -238,7 +361,17 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
 
 @router.get("/connections")
 async def get_active_connections():
-    """Get count of active WebSocket connections."""
+    """
+    Get count of active WebSocket connections.
+
+    **Response:**
+    ```json
+    {
+        "active_connections": 3,
+        "timestamp": "2026-03-02T12:34:56.789Z"
+    }
+    ```
+    """
     return {
         "active_connections": len(manager.active_connections),
         "timestamp": datetime.utcnow().isoformat()

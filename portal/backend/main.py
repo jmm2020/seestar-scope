@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-from backend.routers import telescope, gallery, processing, status_ws, autofocus, platesolve
+from backend.routers import telescope, gallery, processing, status_ws
 from backend.config import settings
 from backend.database import init_database, close_database
 
@@ -23,28 +23,28 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     logger.info("SeestarScope Backend starting up...")
-
+    
     # Initialize SQLite database for gallery
     db_path = init_database()
     app.state.db_path = db_path
     logger.info(f"Gallery database ready at {db_path}")
-
+    
     # Initialize shared ALPACA client
     from backend.clients import get_alpaca_client, get_stellarium_client
     alpaca = get_alpaca_client()
     stellarium = get_stellarium_client()
-
+    
     # Store in app state
     app.state.alpaca = alpaca
     app.state.stellarium = stellarium
-
+    
     # Connect to telescope
     if settings.auto_connect:
         results = alpaca.connect_all()
         logger.info(f"ALPACA connection: {results}")
-
+    
     yield
-
+    
     logger.info("SeestarScope Backend shutting down...")
     alpaca.disconnect_all()
     close_database()
@@ -70,9 +70,7 @@ app.add_middleware(
 app.include_router(telescope.router, prefix="/api/telescope", tags=["telescope"])
 app.include_router(gallery.router, prefix="/api/gallery", tags=["gallery"])
 app.include_router(processing.router, prefix="/api/processing", tags=["processing"])
-app.include_router(status_ws.router, prefix="/api/status", tags=["status"])
-app.include_router(autofocus.router, prefix="/api/autofocus", tags=["autofocus"])
-app.include_router(platesolve.router, prefix="/api/platesolve", tags=["platesolve"])
+app.include_router(status_ws.router)  # WebSocket live status (Phase 3)
 
 @app.get("/")
 async def root():
@@ -84,9 +82,8 @@ async def root():
             "telescope": "/api/telescope/*",
             "gallery": "/api/gallery/*",
             "processing": "/api/processing/*",
-            "status_ws": "/api/status/ws",
-            "autofocus": "/api/autofocus/*",
-            "platesolve": "/api/platesolve/*",
+            "status_ws": "ws://192.168.0.148:8503/api/status/ws",
+            "status_connections": "/api/status/connections",
             "docs": "/docs",
             "health": "/health"
         }
