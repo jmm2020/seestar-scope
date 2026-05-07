@@ -1,0 +1,7 @@
+worktree:
+  baseBranch: main
+isolation:
+  enabled: true
+defaults:
+  loadDefaultWorkflows: true
+  loadDefaultCommands: true
