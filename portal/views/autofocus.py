@@ -6,7 +6,6 @@ Calls FastAPI backend at localhost:8503/api/autofocus/*.
 import streamlit as st
 import requests
 import logging
-from datetime import datetime
 from typing import Optional, Dict, Any
 import pandas as pd
 import plotly.graph_objects as go
@@ -70,7 +69,7 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 

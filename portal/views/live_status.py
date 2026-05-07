@@ -6,8 +6,6 @@ Updates every 2 seconds using st.rerun() for real-time monitoring.
 """
 import streamlit as st
 import requests
-from datetime import datetime
-from typing import Dict, Any, Optional
 import logging
 import time
 
@@ -64,7 +62,7 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 

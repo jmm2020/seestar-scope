@@ -5,7 +5,6 @@ Mirrors the functionality available in the Streamlit UI but as a programmable AP
 """
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import Optional
 
 router = APIRouter()
 

@@ -12,9 +12,7 @@ import logging
 
 from ..services.autofocus_service import (
     AutoFocusService,
-    AutoFocusConfig,
-    AutoFocusResult,
-    FocusPosition
+    AutoFocusConfig
 )
 
 logger = logging.getLogger(__name__)

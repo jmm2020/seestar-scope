@@ -169,7 +169,6 @@ def _render_device_health(alpaca):
                 st.metric("Battery", f"{batt_pct}%",
                           help=f"Charge status: {charge}")
                 st.progress(batt_pct / 100)
-                charging = pi.get("charge_online", False)
                 batt_temp = pi.get("battery_temp")
                 caption_parts = [charge]
                 if batt_temp is not None:

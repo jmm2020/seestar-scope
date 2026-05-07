@@ -8,7 +8,6 @@ Author: Lore (Phase 3)
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import JSONResponse
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -17,9 +16,6 @@ import shutil
 from ..services.platesolve_service import (
     ASTAPService,
     PlatesolvingResult,
-    SolveStatus,
-    SolveMode,
-    WCSSolution,
 )
 
 

@@ -128,8 +128,8 @@ def _render_stacking_controls(alpaca, view, is_stacking):
         gain = st.slider("Stack Gain", 0, 400, value=int(current_gain),
                           step=1, key="stack_gain")
     with col_exp:
-        exp_ms = st.number_input("Exposure (ms)", min_value=1000, max_value=30000,
-                                  value=10000, step=1000, key="stack_exp")
+        st.number_input("Exposure (ms)", min_value=1000, max_value=30000,
+                        value=10000, step=1000, key="stack_exp")
     with col_lp:
         lp_on = view.get("lp_filter", False) if view else False
         lp_filter = st.checkbox("LP Filter", value=lp_on, key="stack_lp")

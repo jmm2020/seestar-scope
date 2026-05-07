@@ -10,8 +10,7 @@ Implements automated focusing for Seestar S50 using:
 
 import numpy as np
 from scipy import ndimage
-from scipy.optimize import curve_fit
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, List, Tuple
 import logging
 from dataclasses import dataclass
 from datetime import datetime
