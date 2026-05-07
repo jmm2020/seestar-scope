@@ -7,7 +7,7 @@ import os
 import streamlit as st
 import requests
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import logging
 from pathlib import Path
 
@@ -42,7 +42,7 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 
@@ -310,8 +310,7 @@ def display_solve_result(result: Dict[str, Any]):
                 st.markdown("### 🎯 Pointing Accuracy")
                 
                 offset_arcsec = result['offset_arcsec']
-                offset_color = "green" if offset_arcsec < 30 else "orange" if offset_arcsec < 60 else "red"
-                
+
                 col_offset1, col_offset2, col_offset3 = st.columns(3)
                 
                 with col_offset1:
@@ -464,5 +463,5 @@ def format_timestamp(timestamp_str: str) -> str:
     try:
         dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
         return dt.strftime("%m/%d %H:%M:%S")
-    except:
+    except Exception:
         return timestamp_str[:16] if timestamp_str else ""

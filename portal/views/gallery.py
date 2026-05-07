@@ -6,8 +6,8 @@ Shows thumbnails, metadata, filtering controls, and processing status.
 import os
 import streamlit as st
 import requests
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from datetime import datetime
+from typing import List, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 
@@ -193,7 +193,7 @@ def render_image_card(image: Dict[str, Any]):
         
         try:
             st.image(thumbnail_url, use_container_width=True)
-        except:
+        except Exception:
             st.error("Failed to load thumbnail")
         
         # Metadata
@@ -264,5 +264,5 @@ def format_timestamp(timestamp_str: str) -> str:
     try:
         dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
         return dt.strftime("%Y-%m-%d %H:%M:%S")
-    except:
+    except Exception:
         return timestamp_str

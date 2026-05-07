@@ -7,7 +7,7 @@ Provides REST API endpoints for:
 
 Runs as separate service on port 8503 alongside Streamlit UI (8502).
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
