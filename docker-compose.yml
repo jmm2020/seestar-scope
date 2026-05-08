@@ -78,7 +78,11 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: seestar-cloudflared
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    # File-based config: shares the workstation's existing tunnel (831e21c1...).
+    # Mount credentials JSON + config.yml from ./cloudflared (gitignored creds).
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
     depends_on:
       seestar-portal-ui:
         condition: service_healthy

@@ -1,0 +1,18 @@
+# Cloudflare tunnel config — shares the existing UCIS-constellation tunnel.
+#
+# The credentials JSON for this tunnel is NOT committed (see .gitignore).
+# Copy it from the workstation before bringing the tunnel profile up:
+#
+#     scp /home/jmm2020/.cloudflared/831e21c1-a274-4f14-8b29-b91097f96c92.json \
+#         jetson:~/seestar-scope/cloudflared/
+#
+# Container path is /etc/cloudflared (mounted read-only by docker-compose).
+
+tunnel: 831e21c1-a274-4f14-8b29-b91097f96c92
+credentials-file: /etc/cloudflared/831e21c1-a274-4f14-8b29-b91097f96c92.json
+
+ingress:
+  - hostname: s50.jmm2020ai.com
+    service: http://seestar-portal-ui:8502
+  # Catch-all (required by cloudflared)
+  - service: http_status:404

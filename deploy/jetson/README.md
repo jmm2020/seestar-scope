@@ -63,35 +63,56 @@ The portal is accessible from any device on the same LAN.
 
 ## Remote Access via Cloudflare Tunnel
 
-For deployments at remote sites (no LAN access from the workstation), the
-compose file ships a `seestar-cloudflared` service behind the `tunnel` profile.
+For deployments at remote sites, the compose file ships a `seestar-cloudflared`
+sidecar behind the `tunnel` profile. It connects to the **existing** UCIS
+Cloudflare tunnel (`831e21c1-a274-4f14-8b29-b91097f96c92`) as a second
+connector — no new tunnel, no token wrangling.
 
-### One-time setup (Cloudflare Zero Trust dashboard)
+### One-time setup on the Jetson
 
-1. **Create a tunnel** — Networks → Tunnels → Create a tunnel → name `seestar-jetson`.
-2. **Copy the token** — shown once during setup. Add to `.env`:
+1. **Copy credentials from workstation** (where the tunnel is currently anchored):
+   ```bash
+   # From the workstation:
+   scp /home/jmm2020/.cloudflared/831e21c1-a274-4f14-8b29-b91097f96c92.json \
+       jmm2020@<jetson-ip>:~/seestar-scope/cloudflared/
    ```
-   CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoi...
+   The JSON is gitignored (`cloudflared/*.json`) and never enters version
+   control.
+
+2. **Verify ingress rule** — `cloudflared/config.yml` already contains:
+   ```yaml
+   ingress:
+     - hostname: s50.jmm2020ai.com
+       service: http://seestar-portal-ui:8502
    ```
-3. **Configure ingress** — Public Hostname → Add:
-   - Subdomain: `s50` (or your choice)
-   - Domain: `jmm2020ai.com`
-   - Service: `http://seestar-portal-ui:8502`
+   Edit if you want a different hostname.
 
-### Start with tunnel
-
-```bash
-docker compose --profile tunnel up -d
-```
+3. **Start with the tunnel profile**:
+   ```bash
+   cd ~/seestar-scope
+   docker compose --profile tunnel up -d
+   ```
 
 The portal becomes reachable at `https://s50.jmm2020ai.com` from anywhere.
 
-### Cutover note (workstation → Jetson)
+### Cutover (workstation → Jetson)
 
-If `s50.jmm2020ai.com` was previously routed to the workstation's tunnel,
-remove that hostname from the workstation's `/etc/cloudflared/config.yml`
-*after* confirming the Jetson tunnel works. DNS at the Cloudflare side
-takes effect within seconds.
+While both connectors are up, Cloudflare load-balances `s50.jmm2020ai.com`
+between them — but the workstation still rewrites to its local
+`http://localhost:8502`, while the Jetson rewrites to its container.
+**Once you've verified the Jetson serves correctly**, remove the s50 rule
+from the workstation tunnel:
+
+```bash
+# On the workstation:
+sudo sed -i '/hostname: s50.jmm2020ai.com/,/service: http:\/\/localhost:8502/d' \
+    /etc/cloudflared/config.yml
+sudo systemctl reload cloudflared
+```
+
+After that, only the Jetson serves the route, and the workstation's
+seestar containers can be stopped (`docker compose down` in the old
+`KnowledgeBase/seestar_scope/`).
 
 ## Log Viewing
 
