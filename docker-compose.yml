@@ -74,6 +74,19 @@ services:
       retries: 3
       start_period: 20s
 
+  seestar-cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: seestar-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      seestar-portal-ui:
+        condition: service_healthy
+    networks:
+      - seestar-net
+    profiles:
+      - tunnel
+
 networks:
   seestar-net:
     driver: bridge

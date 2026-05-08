@@ -61,6 +61,38 @@ http://<jetson-ip>:8502
 
 The portal is accessible from any device on the same LAN.
 
+## Remote Access via Cloudflare Tunnel
+
+For deployments at remote sites (no LAN access from the workstation), the
+compose file ships a `seestar-cloudflared` service behind the `tunnel` profile.
+
+### One-time setup (Cloudflare Zero Trust dashboard)
+
+1. **Create a tunnel** — Networks → Tunnels → Create a tunnel → name `seestar-jetson`.
+2. **Copy the token** — shown once during setup. Add to `.env`:
+   ```
+   CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoi...
+   ```
+3. **Configure ingress** — Public Hostname → Add:
+   - Subdomain: `s50` (or your choice)
+   - Domain: `jmm2020ai.com`
+   - Service: `http://seestar-portal-ui:8502`
+
+### Start with tunnel
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+The portal becomes reachable at `https://s50.jmm2020ai.com` from anywhere.
+
+### Cutover note (workstation → Jetson)
+
+If `s50.jmm2020ai.com` was previously routed to the workstation's tunnel,
+remove that hostname from the workstation's `/etc/cloudflared/config.yml`
+*after* confirming the Jetson tunnel works. DNS at the Cloudflare side
+takes effect within seconds.
+
 ## Log Viewing
 
 ```bash
