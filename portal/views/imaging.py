@@ -117,8 +117,8 @@ def _render_session_status(alpaca):
 
 # --- Stacking Controls ---
 
-def _render_stacking_controls(alpaca, view, is_stacking):
-    """Gain, exposure, LP filter, and start/stop/restart buttons."""
+def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = True):
+    """Gain, exposure, LP filter, and start/stop/restart buttons; disabled when alp_available is False."""
     st.subheader("Stacking Controls")
 
     current_gain = view.get("gain", 80) if view else 80
@@ -136,7 +136,8 @@ def _render_stacking_controls(alpaca, view, is_stacking):
 
     col_start, col_stop, col_restart = st.columns(3)
     with col_start:
-        if st.button("Start Stack", type="primary", disabled=is_stacking,
+        if st.button("Start Stack", type="primary",
+                     disabled=is_stacking or not alp_available,
                      use_container_width=True, key="btn_start_stack"):
             with st.spinner("Starting stack..."):
                 alpaca.start_stack(restart=False, gain=gain)
@@ -144,13 +145,15 @@ def _render_stacking_controls(alpaca, view, is_stacking):
                     alpaca.set_stack_lp_filter(lp_filter)
             st.rerun()
     with col_stop:
-        if st.button("Stop Stack", disabled=not is_stacking,
+        if st.button("Stop Stack",
+                     disabled=not is_stacking or not alp_available,
                      use_container_width=True, key="btn_stop_stack"):
             with st.spinner("Stopping..."):
                 alpaca.stop_stack()
             st.rerun()
     with col_restart:
-        if st.button("Restart Stack", use_container_width=True,
+        if st.button("Restart Stack", disabled=not alp_available,
+                     use_container_width=True,
                      key="btn_restart_stack"):
             with st.spinner("Restarting stack..."):
                 alpaca.stop_stack()
@@ -503,6 +506,13 @@ def render_imaging(alpaca, config):
     """Render the camera imaging page."""
     st.header("\U0001f4f7 Camera & Imaging")
 
+    alp_available = alpaca.is_alp_available()
+    if not alp_available:
+        st.error(
+            f"⚠️ **seestar_alp is not reachable** at `{alpaca.alp_base_url}` — "
+            "live view and stacking are non-functional until the service is running."
+        )
+
     # Live MJPEG stream
     _render_live_view(alpaca)
 
@@ -514,7 +524,7 @@ def render_imaging(alpaca, config):
     st.divider()
 
     # Stacking controls
-    _render_stacking_controls(alpaca, view, is_stacking)
+    _render_stacking_controls(alpaca, view, is_stacking, alp_available)
 
     # Stack settings expander
     _render_stack_settings(alpaca)
