@@ -82,7 +82,95 @@ nodes:
 
       End your response with one line: "<N> deps detected, <M> docs fetched".
     denied_tools: [Edit]
+    # Anchor to a trivial bash node so Archon's scheduler picks this up.
+    # Root-level AI nodes (no depends_on) were silently skipped in earlier runs.
+    # probe-stack-health finishes in ~80ms, so parallelism intent is preserved.
+    depends_on: [probe-stack-health]
+    trigger_rule: all_done
     timeout: 240000
+
+  # ---------------------------------------------------------------------------
+  # Phase 0b — grounding artifacts: run context (git SHA + env) and project
+  # config extraction (alp-config/config.toml). Both are tiny bash nodes so
+  # downstream probes can self-parameterize instead of hardcoding values.
+  # ---------------------------------------------------------------------------
+  - id: record-run-context
+    bash: |
+      set +e
+      mkdir -p "$ARTIFACTS_DIR"
+      OUT="$ARTIFACTS_DIR/run-context.json"
+      trap '[ -s "$OUT" ] || echo "{\"status\":\"error\",\"reason\":\"node crashed before writing\"}" > "$OUT"' EXIT
+
+      SHA=$(git -c safe.directory=* rev-parse HEAD 2>/dev/null || echo "unknown")
+      BRANCH=$(git -c safe.directory=* rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+      DIRTY=$(git -c safe.directory=* status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+      SHORT=$(git -c safe.directory=* rev-parse --short HEAD 2>/dev/null || echo "unknown")
+      cat > "$OUT" <<EOF
+      {
+        "started_at": "$(date -Iseconds)",
+        "git_sha": "$SHA",
+        "git_short_sha": "$SHORT",
+        "git_branch": "$BRANCH",
+        "git_dirty_files": $DIRTY,
+        "jetson_host": "${JETSON_HOST:-192.168.0.234}",
+        "seestar_ip": "${SEESTAR_IP:-192.168.0.132}",
+        "seestar_port": "${SEESTAR_PORT:-32323}",
+        "post_gh_comment": "${POST_GH_COMMENT:-0}",
+        "gh_issue_number": "${GH_ISSUE_NUMBER:-}"
+      }
+      EOF
+      cat "$OUT"
+      exit 0
+    timeout: 5000
+
+  - id: read-project-config
+    bash: |
+      set +e
+      mkdir -p "$ARTIFACTS_DIR"
+      OUT="$ARTIFACTS_DIR/project-config.json"
+      trap '[ -s "$OUT" ] || echo "{\"status\":\"error\",\"reason\":\"node crashed before writing\"}" > "$OUT"' EXIT
+
+      CONFIG_PATHS=("alp-config/config.toml" "vendor/seestar_alp/device/config.toml")
+      FOUND=""
+      for p in "${CONFIG_PATHS[@]}"; do
+        if [ -f "$p" ]; then FOUND="$p"; break; fi
+      done
+
+      if [ -z "$FOUND" ]; then
+        echo '{"found": false, "alp_port": 5555, "seestars": [], "primary_device_num": 0}' > "$OUT"
+        cat "$OUT"; exit 0
+      fi
+
+      python3 - "$FOUND" > "$OUT" <<'PY'
+      import sys, json, re
+      path = sys.argv[1]
+      text = open(path).read()
+      def grep_int(pat, default):
+          m = re.search(pat, text, re.M)
+          return int(m.group(1)) if m else default
+      seestars = []
+      for block in re.findall(r"\[\[seestars\]\][^\[]*", text):
+          name_m = re.search(r'name\s*=\s*"([^"]+)"', block)
+          ip_m = re.search(r'ip_address\s*=\s*"([^"]+)"', block)
+          num_m = re.search(r'device_num\s*=\s*(\d+)', block)
+          if name_m or ip_m or num_m:
+              seestars.append({
+                  "name": name_m.group(1) if name_m else None,
+                  "ip_address": ip_m.group(1) if ip_m else None,
+                  "device_num": int(num_m.group(1)) if num_m else None,
+              })
+      out = {
+          "found": True,
+          "config_path": path,
+          "alp_port": grep_int(r'^port\s*=\s*(\d+)', 5555),
+          "seestars": seestars,
+          "primary_device_num": seestars[0]["device_num"] if seestars and seestars[0].get("device_num") is not None else 0,
+      }
+      print(json.dumps(out, indent=2))
+      PY
+      cat "$OUT"
+      exit 0
+    timeout: 5000
 
   # ---------------------------------------------------------------------------
   # Phase 1 — soft stack-health probe + hardware presence detect (parallel).
@@ -95,6 +183,7 @@ nodes:
       set +e
       mkdir -p "$ARTIFACTS_DIR"
       OUT="$ARTIFACTS_DIR/stack-health.json"
+      trap '[ -s "$OUT" ] || echo "{\"status\":\"error\",\"reason\":\"node crashed before writing\"}" > "$OUT"' EXIT
 
       probe_one() {
         local svc="$1"
@@ -129,6 +218,7 @@ nodes:
       PORT="${SEESTAR_PORT:-32323}"
       mkdir -p "$ARTIFACTS_DIR"
       OUT="$ARTIFACTS_DIR/hardware.json"
+      trap '[ -s "$OUT" ] || echo "{\"status\":\"error\",\"reason\":\"node crashed before writing\"}" > "$OUT"' EXIT
       echo "Probing $IP:$PORT (2s timeout)..."
       if timeout 2 bash -c "</dev/tcp/$IP/$PORT" 2>/dev/null; then
         echo "{\"hw_available\": true, \"address\": \"$IP:$PORT\"}" > "$OUT"
@@ -150,6 +240,10 @@ nodes:
       JETSON_HOST="${JETSON_HOST:-192.168.0.234}"
       mkdir -p "$ARTIFACTS_DIR"
       OUT="$ARTIFACTS_DIR/alp-devices.json"
+      trap '[ -s "$OUT" ] || echo "{\"status\":\"error\",\"reason\":\"node crashed before writing\"}" > "$OUT"' EXIT
+
+      # Read primary device_num from project-config artifact (default 0 if missing)
+      DEVICE_NUM=$(python3 -c "import json; print(json.load(open('$ARTIFACTS_DIR/project-config.json')).get('primary_device_num', 0))" 2>/dev/null || echo 0)
 
       # Try host-published port first, then container DNS (works only if Archon
       # worker is co-resident on seestar-net — usually false but cheap to try).
@@ -166,10 +260,10 @@ nodes:
       for dev in telescope camera focuser filterwheel switch; do
         REACHABLE=false; CONNECTED=null; NAME=""; ERR=""
         if [ -n "$ALP_BASE" ]; then
-          if RESP=$(curl -fsS -m 5 "${ALP_BASE}/api/v1/${dev}/0/connected" 2>&1); then
+          if RESP=$(curl -fsS -m 5 "${ALP_BASE}/api/v1/${dev}/${DEVICE_NUM}/connected" 2>&1); then
             REACHABLE=true
             CONNECTED=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('Value','null'))" 2>/dev/null || echo null)
-            NAME=$(curl -fsS -m 5 "${ALP_BASE}/api/v1/${dev}/0/name" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('Value',''))" 2>/dev/null || echo "")
+            NAME=$(curl -fsS -m 5 "${ALP_BASE}/api/v1/${dev}/${DEVICE_NUM}/name" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('Value',''))" 2>/dev/null || echo "")
           else
             ERR=$(echo "$RESP" | head -c 200 | tr '"' "'")
           fi
@@ -178,14 +272,14 @@ nodes:
         fi
         [ "$first" -eq 0 ] && echo "," >> "$OUT"
         first=0
-        printf '  {"device":"%s","reachable":%s,"connected":%s,"name":"%s","error":"%s","alp_base":"%s"}' \
-          "$dev" "$REACHABLE" "$CONNECTED" "$NAME" "$ERR" "$ALP_BASE" >> "$OUT"
+        printf '  {"device":"%s","device_num":%s,"reachable":%s,"connected":%s,"name":"%s","error":"%s","alp_base":"%s"}' \
+          "$dev" "$DEVICE_NUM" "$REACHABLE" "$CONNECTED" "$NAME" "$ERR" "$ALP_BASE" >> "$OUT"
       done
       echo "" >> "$OUT"
       echo "]" >> "$OUT"
       cat "$OUT"
       exit 0
-    depends_on: [probe-stack-health]
+    depends_on: [probe-stack-health, read-project-config]
     trigger_rule: all_done
     timeout: 60000
 
