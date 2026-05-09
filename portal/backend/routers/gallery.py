@@ -6,11 +6,14 @@ Integrates with GalleryDatabase (SQLite) for filtering/searching.
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from typing import Optional, List
 from datetime import datetime
 from pathlib import Path
+import io
 import logging
+
+from PIL import Image
 
 from ..models.gallery import (
     GalleryDatabase,
@@ -22,7 +25,7 @@ from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/gallery", tags=["gallery"])
+router = APIRouter(tags=["gallery"])
 
 
 @router.get("/", response_model=List[ImageRecord])
@@ -50,7 +53,6 @@ async def list_images(
     - GET /api/gallery/?start_date=2026-03-01T00:00:00Z&end_date=2026-03-02T23:59:59Z
     """
     try:
-        # Build filter criteria
         filter_criteria = GalleryFilter(
             target=target,
             session_id=session_id,
@@ -104,18 +106,11 @@ async def get_image_detail(image_id: int, db: GalleryDatabase = Depends(get_db))
     Returns ImageRecord with all metadata, tags, notes, processing status.
     """
     try:
-        # Use search with no filters to get single record
-        filter_criteria = GalleryFilter(limit=1000, offset=0)  # Broader search
-        records = db.search(filter_criteria)
-        
-        # Filter by ID
-        matching = [r for r in records if r.id == image_id]
-        
-        if not matching:
+        record = db.get_by_id(image_id)
+        if record is None:
             raise HTTPException(status_code=404, detail=f"Image {image_id} not found")
-        
-        return matching[0]
-        
+        return record
+
     except HTTPException:
         raise
     except Exception as e:
@@ -131,36 +126,33 @@ async def get_thumbnail(
 ):
     """
     Serve thumbnail for an image.
-    
-    Returns the PNG preview (scaled if size < original).
-    For now, returns full PNG - future enhancement can add resize.
-    
+
+    Returns the PNG preview scaled to fit within size×size pixels (aspect ratio preserved).
+    If the original is already smaller than size, it is returned as-is.
+
     Query params:
-    - size: Thumbnail size in pixels (default 256)
+    - size: Max thumbnail dimension in pixels (default 256)
     """
     try:
-        # Get image record to find PNG path
-        filter_criteria = GalleryFilter(limit=1000, offset=0)
-        records = db.search(filter_criteria)
-        matching = [r for r in records if r.id == image_id]
-        
-        if not matching:
+        record = db.get_by_id(image_id)
+        if record is None:
             raise HTTPException(status_code=404, detail=f"Image {image_id} not found")
-        
-        record = matching[0]
+
         png_path = Path(record.png_path)
-        
         if not png_path.exists():
             raise HTTPException(status_code=404, detail=f"PNG file not found: {record.png_path}")
-        
-        # Serve PNG directly
-        # TODO: Add image resize logic if size < original dimensions
-        return FileResponse(
-            path=str(png_path),
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=3600"}
-        )
-        
+
+        cache_headers = {"Cache-Control": "public, max-age=3600"}
+        with Image.open(png_path) as img:
+            if img.width > size or img.height > size:
+                img.thumbnail((size, size), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                buf.seek(0)
+                return StreamingResponse(buf, media_type="image/png", headers=cache_headers)
+
+        return FileResponse(path=str(png_path), media_type="image/png", headers=cache_headers)
+
     except HTTPException:
         raise
     except Exception as e:

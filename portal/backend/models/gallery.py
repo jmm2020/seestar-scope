@@ -8,6 +8,7 @@ Supports filtering by target, date range, exposure, filter, session.
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
+import json
 import sqlite3
 from pydantic import BaseModel, Field
 
@@ -139,9 +140,37 @@ class GalleryDatabase:
         self.conn.executescript(self.SCHEMA)
         self.conn.commit()
 
+    def _row_to_record(self, row) -> ImageRecord:
+        metadata = ImageMetadata(
+            target=row['target'],
+            exposure=row['exposure'],
+            gain=row['gain'],
+            filter=row['filter'],
+            ra=row['ra'],
+            dec=row['dec'],
+            temperature=row['temperature'],
+            binning=row['binning'],
+            observer=row['observer'],
+            telescope=row['telescope']
+        )
+        return ImageRecord(
+            id=row['id'],
+            fits_path=row['fits_path'],
+            png_path=row['png_path'],
+            session_id=row['session_id'],
+            captured_at=datetime.fromisoformat(row['captured_at']),
+            metadata=metadata,
+            processed=bool(row['processed']),
+            processed_path=row['processed_path'],
+            stacked=bool(row['stacked']),
+            stack_id=row['stack_id'],
+            tags=json.loads(row['tags']) if row['tags'] else [],
+            notes=row['notes'],
+            quality_score=row['quality_score']
+        )
+
     def add_image(self, record: ImageRecord) -> int:
         """Insert new image record. Returns the new record ID."""
-        import json
         cursor = self.conn.execute("""
             INSERT INTO images (
                 fits_path, png_path, session_id, captured_at,
@@ -165,8 +194,6 @@ class GalleryDatabase:
 
     def search(self, filter_criteria: GalleryFilter) -> List[ImageRecord]:
         """Search images with flexible filtering."""
-        import json
-
         query = "SELECT * FROM images WHERE 1=1"
         params = []
 
@@ -208,40 +235,7 @@ class GalleryDatabase:
         params.extend([filter_criteria.limit, filter_criteria.offset])
 
         cursor = self.conn.execute(query, params)
-        rows = cursor.fetchall()
-
-        records = []
-        for row in rows:
-            metadata = ImageMetadata(
-                target=row['target'],
-                exposure=row['exposure'],
-                gain=row['gain'],
-                filter=row['filter'],
-                ra=row['ra'],
-                dec=row['dec'],
-                temperature=row['temperature'],
-                binning=row['binning'],
-                observer=row['observer'],
-                telescope=row['telescope']
-            )
-            record = ImageRecord(
-                id=row['id'],
-                fits_path=row['fits_path'],
-                png_path=row['png_path'],
-                session_id=row['session_id'],
-                captured_at=datetime.fromisoformat(row['captured_at']),
-                metadata=metadata,
-                processed=bool(row['processed']),
-                processed_path=row['processed_path'],
-                stacked=bool(row['stacked']),
-                stack_id=row['stack_id'],
-                tags=json.loads(row['tags']) if row['tags'] else [],
-                notes=row['notes'],
-                quality_score=row['quality_score']
-            )
-            records.append(record)
-
-        return records
+        return [self._row_to_record(row) for row in cursor.fetchall()]
 
     def get_stats(self) -> GalleryStats:
         """Get gallery statistics summary."""
@@ -278,6 +272,14 @@ class GalleryDatabase:
             stacked_count=row['stacked']
         )
 
+    def get_by_id(self, image_id: int) -> Optional[ImageRecord]:
+        """Fetch a single image record by primary key."""
+        cursor = self.conn.execute("SELECT * FROM images WHERE id = ?", (image_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_record(row)
+
     def update_processing_status(self, image_id: int, processed_path: str):
         """Mark image as processed and record output path."""
         self.conn.execute("""
@@ -289,7 +291,6 @@ class GalleryDatabase:
 
     def add_tags(self, image_id: int, tags: List[str]):
         """Add tags to an image (merges with existing)."""
-        import json
         cursor = self.conn.execute("SELECT tags FROM images WHERE id = ?", (image_id,))
         row = cursor.fetchone()
         if row:
