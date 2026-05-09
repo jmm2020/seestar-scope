@@ -67,12 +67,14 @@ app.add_middleware(
 )
 
 # Register routers
+# telescope defines no prefix internally; main.py owns it
 app.include_router(telescope.router, prefix="/api/telescope", tags=["telescope"])
-app.include_router(gallery.router, prefix="/api/gallery", tags=["gallery"])
-app.include_router(processing.router, prefix="/api/processing", tags=["processing"])
-app.include_router(status_ws.router)  # WebSocket live status (Phase 3)
-app.include_router(autofocus.router, prefix="/api/autofocus", tags=["autofocus"])
-app.include_router(platesolve.router, prefix="/api/platesolve", tags=["platesolve"])
+# remaining routers define their own prefix in APIRouter() — no prefix= here
+app.include_router(gallery.router)
+app.include_router(processing.router)
+app.include_router(status_ws.router)
+app.include_router(autofocus.router)
+app.include_router(platesolve.router)
 
 @app.get("/")
 async def root():
