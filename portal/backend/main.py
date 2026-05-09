@@ -84,6 +84,8 @@ async def root():
             "telescope": "/api/telescope/*",
             "gallery": "/api/gallery/*",
             "processing": "/api/processing/*",
+            "autofocus": "/api/autofocus/*",
+            "platesolve": "/api/platesolve/*",
             "status_ws": "ws://192.168.0.148:8503/api/status/ws",
             "status_connections": "/api/status/connections",
             "docs": "/docs",
