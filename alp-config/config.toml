@@ -65,8 +65,10 @@ log_events_in_info = true
 
 [[seestars]]
 name = "Seestar Alpha"
-# ip_address should not have to be changed unless you have more than 1 seestar
-ip_address = "seestar.local"
+# Containerized ALP can't resolve mDNS (`seestar.local`); use the device's
+# DHCP-assigned LAN IP directly. Update if your S50's IP changes — consider
+# a DHCP reservation on the router to keep this stable.
+ip_address = "192.168.0.132"
 device_num = 1
 # You can specify the following settings to override those found in the seestar_initialization section on a per-device level
 #is_EQ_mode = false          # can be used to override default
