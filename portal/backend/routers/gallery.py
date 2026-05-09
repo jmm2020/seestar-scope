@@ -53,7 +53,6 @@ async def list_images(
     - GET /api/gallery/?start_date=2026-03-01T00:00:00Z&end_date=2026-03-02T23:59:59Z
     """
     try:
-        # Build filter criteria
         filter_criteria = GalleryFilter(
             target=target,
             session_id=session_id,

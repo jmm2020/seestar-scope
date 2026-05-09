@@ -108,17 +108,14 @@ async def process_session(
     ```
     """
     try:
-        # Validate FITS files exist
         fits_paths = [Path(f) for f in request.fits_files]
         missing = [str(f) for f in fits_paths if not f.exists()]
-        
         if missing:
             raise HTTPException(
                 status_code=400,
                 detail=f"FITS files not found: {missing}"
             )
-        
-        # Check for duplicate session
+
         if request.session_id in processing_tasks:
             existing = processing_tasks[request.session_id]
             if existing.status in [ProcessingStatus.PENDING, ProcessingStatus.CONVERTING,
@@ -128,7 +125,6 @@ async def process_session(
                     detail=f"Session {request.session_id} is already processing"
                 )
         
-        # Start processing in background
         background_tasks.add_task(
             _process_session_task,
             session_id=request.session_id,
@@ -136,8 +132,6 @@ async def process_session(
             target_name=request.target_name,
             metadata=request.metadata
         )
-        
-        # Return immediate response
         return ProcessSessionResponse(
             success=True,
             status="queued",
@@ -217,7 +211,6 @@ async def stream_session_status(session_id: str):
     ```
     """
     async def event_generator():
-        """Generate SSE events for processing status"""
         while True:
             # Check task status
             if session_id in processing_tasks:
@@ -375,14 +368,12 @@ async def _process_session_task(
     Background task for Siril processing.
     Updates processing_tasks dict with status.
     """
-    # Mark as pending
     processing_tasks[session_id] = ProcessingResult(
         success=False,
         status=ProcessingStatus.PENDING
     )
-    
-    # Execute Siril processing (blocking, but in background thread)
-    # Use asyncio.to_thread to avoid blocking event loop
+
+    # asyncio.to_thread keeps Siril's blocking subprocess off the event loop
     result = await asyncio.to_thread(
         siril_service.process_session,
         session_id=session_id,
@@ -390,8 +381,6 @@ async def _process_session_task(
         target_name=target_name,
         metadata=metadata
     )
-    
-    # Update task store with final result
     processing_tasks[session_id] = result
 
 
