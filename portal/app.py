@@ -103,6 +103,10 @@ elif page == "Live Status":
     from views.live_status import render_live_status
     render_live_status(alpaca)
 
+elif page == "Sky Map":
+    from views.skymap import render_skymap
+    render_skymap()
+
 elif page == "GoTo":
     from views.goto import render_goto
     render_goto(alpaca, stellarium)

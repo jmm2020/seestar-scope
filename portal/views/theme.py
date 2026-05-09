@@ -5,6 +5,7 @@ import streamlit as st
 NAV_ITEMS = {
     "Dashboard": "Dashboard",
     "Live Status": "Live Status",
+    "Sky Map": "Sky Map",
     "GoTo": "GoTo / Slew",
     "Imaging": "Imaging",
     "Focus": "Focus",
@@ -18,6 +19,7 @@ NAV_ITEMS = {
 NAV_ICONS = {
     "Dashboard": "\u2604\ufe0f",   # comet
     "Live Status": "\U0001f4e1",   # satellite antenna
+    "Sky Map": "\U0001f30c",       # milky way
     "GoTo": "\u2b50",              # star
     "Imaging": "\U0001f4f7",       # camera
     "Focus": "\U0001f52d",         # telescope
