@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-from backend.routers import telescope, gallery, processing, status_ws
+from backend.routers import telescope, gallery, processing, status_ws, autofocus, platesolve
 from backend.config import settings
 from backend.database import init_database, close_database
 
@@ -70,6 +70,8 @@ app.add_middleware(
 app.include_router(telescope.router, prefix="/api/telescope", tags=["telescope"])
 app.include_router(gallery.router, prefix="/api/gallery", tags=["gallery"])
 app.include_router(processing.router, prefix="/api/processing", tags=["processing"])
+app.include_router(autofocus.router)   # prefix="/api/autofocus" defined in router
+app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in router
 app.include_router(status_ws.router)  # WebSocket live status (Phase 3)
 
 @app.get("/")
