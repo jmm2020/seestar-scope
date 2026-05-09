@@ -54,6 +54,18 @@ def _seestar_action(method: str, params: dict = None, async_mode: bool = True) -
         return {"success": False, "error": str(e)}
 
 
+def _check_alp_reachable() -> bool:
+    """Probe seestar-alp with a 2-second GET to detect service-down early."""
+    try:
+        resp = requests.get(
+            f"{SEESTAR_ALP_URL}/management/v1/description",
+            timeout=2,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 # Popular quick-access targets
 QUICK_TARGETS = [
     ("M42", "Orion Nebula"),
@@ -301,9 +313,16 @@ def _render_mount_controls(alpaca):
     st.subheader("Mount Controls")
     st.caption("Open sends a slew to unfold the arm. Park attempts to close it "
                "(firmware-dependent). Tracking compensates for Earth's rotation.")
+    alp_up = _check_alp_reachable()
+    if not alp_up:
+        st.warning(
+            f"⚠️ Mount control unavailable — seestar-alp is not reachable at "
+            f"{SEESTAR_ALP_URL}. Open / Park / Stop commands require this service."
+        )
     col_open, col_park, col_stop, col_track = st.columns(4)
     with col_open:
         if st.button("Open Scope", type="primary", use_container_width=True,
+                     disabled=not alp_up,
                      help="Wake the Seestar into operational mode "
                           "(iscope_start_view, mode=star) and unfold the arm. "
                           "Required before any slew — the scope rejects movement "
@@ -321,16 +340,18 @@ def _render_mount_controls(alpaca):
                 st.error(f"Open failed: {result['error']}")
     with col_park:
         if st.button("Park (Close)", use_container_width=True,
+                     disabled=not alp_up,
                      help="Attempt to fold/close the telescope arm via scope_park. "
                           "Note: may not work on all firmware versions. "
                           "Use the Seestar app to park if this doesn't respond."):
             result = _seestar_action("scope_park")
             if result["success"]:
-                st.info("Park command sent (async) — check if arm is closing")
+                st.success("Park command sent — check if arm is closing")
             else:
                 st.error(f"Park failed: {result['error']}")
     with col_stop:
         if st.button("Stop Slew", use_container_width=True,
+                     disabled=not alp_up,
                      help="Abort the current slew and stop the telescope. "
                           "Uses the stop_goto_target action."):
             result = _seestar_action("iscope_stop_view",
