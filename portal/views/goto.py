@@ -296,18 +296,22 @@ def _render_mount_controls(alpaca):
                "(firmware-dependent). Tracking compensates for Earth's rotation.")
     col_open, col_park, col_stop, col_track = st.columns(4)
     with col_open:
-        if st.button("Open (Slew)", type="primary", use_container_width=True,
-                     help="Open the arm by sending a slew command. The Seestar "
-                          "automatically opens when it receives a slew. Slews to "
-                          "Dec -40 (low south) as a safe open position."):
-            resp = alpaca.slew_to(0.0, -40.0)
-            if resp.success:
-                st.success("Slew sent — arm is opening")
-                st.session_state["slewing_target"] = "Open position"
-                time.sleep(1)
+        if st.button("Open Scope", type="primary", use_container_width=True,
+                     help="Wake the Seestar into operational mode "
+                          "(iscope_start_view, mode=star) and unfold the arm. "
+                          "Required before any slew — the scope rejects movement "
+                          "commands while in HOME state with 'fail to operate'."):
+            result = _seestar_action(
+                "iscope_start_view",
+                params={"params": {"mode": "star"}},
+            )
+            if result["success"]:
+                st.success("Open command sent — arm is unfolding "
+                           "(give it 10-15 seconds, then refresh Dashboard)")
+                time.sleep(2)
                 st.rerun()
             else:
-                st.error(f"Open/slew failed: {resp.error_message}")
+                st.error(f"Open failed: {result['error']}")
     with col_park:
         if st.button("Park (Close)", use_container_width=True,
                      help="Attempt to fold/close the telescope arm via scope_park. "
