@@ -22,7 +22,7 @@ from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/gallery", tags=["gallery"])
+router = APIRouter(tags=["gallery"])
 
 
 @router.get("/", response_model=List[ImageRecord])
