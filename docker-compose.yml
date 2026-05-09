@@ -62,6 +62,8 @@ services:
     environment:
       - TZ=${TZ:-America/New_York}
       - BACKEND_URL=${BACKEND_URL:-http://seestar-portal-backend:8503}
+      - ALP_HOST=seestar-alp
+      - ALP_PORT=5555
     volumes:
       - sessions-data:/app/sessions
     depends_on:

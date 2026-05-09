@@ -4,14 +4,21 @@ import requests
 import time
 import json
 import logging
+import os
 
 from utils.coordinates import format_ra, format_dec, parse_ra, parse_dec
 from catalog.messier import lookup_messier, search_catalog
 
 logger = logging.getLogger(__name__)
 
-# seestar_alp ALPACA bridge — sends real commands to the Seestar via JSON-RPC
-SEESTAR_ALP_URL = "http://localhost:5555"
+# seestar_alp ALPACA bridge — sends real commands to the Seestar via JSON-RPC.
+# Resolve from env so this works both on a developer host (defaults to localhost)
+# and inside Docker containers where ALP runs as a separate service on the
+# compose network (ALP_HOST=seestar-alp, ALP_PORT=5555).
+SEESTAR_ALP_URL = (
+    f"http://{os.environ.get('ALP_HOST', 'localhost')}"
+    f":{os.environ.get('ALP_PORT', '5555')}"
+)
 
 
 def _seestar_action(method: str, params: dict = None, async_mode: bool = True) -> dict:
@@ -41,7 +48,7 @@ def _seestar_action(method: str, params: dict = None, async_mode: bool = True) -
             return {"success": False, "error": result.get("ErrorMessage", "Unknown error")}
         return {"success": True, "data": result}
     except requests.exceptions.ConnectionError:
-        return {"success": False, "error": "seestar_alp not reachable at localhost:5555"}
+        return {"success": False, "error": f"seestar_alp not reachable at {SEESTAR_ALP_URL}"}
     except Exception as e:
         logger.error(f"seestar_action({method}) failed: {e}")
         return {"success": False, "error": str(e)}
