@@ -13,7 +13,7 @@ services:
       - captures-data:/home/seestar/seestar_alp/captures
       - sessions-data:/home/seestar/seestar_alp/sessions
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5555/api/v1/management/apiversions"]
+      test: ["CMD", "curl", "-f", "http://localhost:5555/management/apiversions"]
       interval: 30s
       timeout: 10s
       retries: 5
