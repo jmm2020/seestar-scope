@@ -176,3 +176,31 @@ def test_set_dew_heater():
         mock_put.return_value = _mock_put_response()
         result = client.set_dew_heater(True)
         assert result.success is True
+
+
+def test_is_alp_available_true():
+    client = AlpacaClient()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    with patch.object(client.session, "get", return_value=mock_resp):
+        assert client.is_alp_available() is True
+
+
+def test_is_alp_available_connection_error():
+    client = AlpacaClient()
+    import requests
+    with patch.object(
+        client.session, "get",
+        side_effect=requests.exceptions.ConnectionError("refused"),
+    ):
+        assert client.is_alp_available() is False
+
+
+def test_is_alp_available_timeout():
+    client = AlpacaClient()
+    import requests
+    with patch.object(
+        client.session, "get",
+        side_effect=requests.exceptions.Timeout("timed out"),
+    ):
+        assert client.is_alp_available() is False

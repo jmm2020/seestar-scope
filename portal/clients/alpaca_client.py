@@ -263,6 +263,14 @@ class AlpacaClient:
             logger.error(f"seestar_action({method}) failed: {e}")
             return None
 
+    def is_alp_available(self, timeout: int = 2) -> bool:
+        """Return True if the seestar_alp bridge is reachable."""
+        try:
+            self.session.get(self.alp_base_url, timeout=timeout)
+            return True
+        except requests.exceptions.RequestException:
+            return False
+
     # --- Live View & Stacking ---
 
     @property
