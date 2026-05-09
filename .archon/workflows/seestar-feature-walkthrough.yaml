@@ -18,6 +18,73 @@ worktree:
 
 nodes:
   # ---------------------------------------------------------------------------
+  # Phase 0 — ground the run in current API/library docs. Parallel root, runs
+  # alongside Phase 1 probes. Downstream AI nodes read $ARTIFACTS_DIR/current-docs.json
+  # to anchor reasoning in real current API surfaces, not training-data echo.
+  #
+  # This is the canonical "fetch-current-docs" template node — auto-detects the
+  # stack from project manifests and pulls canonical docs for each detected dep.
+  # ---------------------------------------------------------------------------
+  - id: web-research
+    model: sonnet
+    allowed_tools: [Read, Bash, WebSearch, WebFetch, Write, Glob]
+    prompt: |
+      You are grounding this workflow in *current* documentation so downstream
+      probes and synthesis don't rely on stale training-data assumptions.
+
+      ## Step 1 — detect the stack
+      Read whichever of these exist and extract dependency names:
+      - `portal/requirements.txt`, `portal/backend/requirements.txt`
+      - `pyproject.toml`
+      - `package.json` (frontend, if any)
+      - `docker-compose*.yml` (service images)
+
+      For seestar-scope specifically expect at minimum:
+      - FastAPI (backend), Streamlit (views), Pillow, requests
+      - seestar_alp (the ALPACA bridge to S50 hardware) — external project at
+        https://github.com/smart-underworld/seestar_alp
+      - ASCOM Alpaca API (the protocol seestar_alp speaks)
+      - Optional: Stellarium remote control API
+
+      ## Step 2 — fetch canonical docs
+      For each detected dependency, do at most ONE WebSearch to find the
+      current canonical docs URL (prefer official docs over tutorials), then
+      ONE WebFetch on the page that captures the API surface a probe needs:
+      endpoints, method signatures, breaking changes since 2024.
+
+      Caps: 8 deps total, 8 WebFetches max. Skip stdlib. Skip if a topic is
+      already covered by a related package.
+
+      For seestar_alp + ASCOM Alpaca, prioritize:
+      - The Alpaca Device API spec (which endpoints exist per device type)
+      - seestar_alp's README/docs for its specific extensions
+
+      ## Step 3 — write the grounding artifact
+      Write `$ARTIFACTS_DIR/current-docs.json`:
+      ```json
+      {
+        "fetched_at": "<iso8601>",
+        "stack_detected": ["fastapi", "streamlit", "seestar_alp", "..."],
+        "references": [
+          {
+            "name": "fastapi",
+            "version_in_project": "0.115.x",
+            "docs_url": "https://fastapi.tiangolo.com/...",
+            "key_facts": [
+              "Routers register via app.include_router(router, prefix=...)",
+              "..."
+            ]
+          }
+        ],
+        "notes": "Free-form caveats — e.g. 'Alpaca spec v3 has breaking changes vs v2'"
+      }
+      ```
+
+      End your response with one line: "<N> deps detected, <M> docs fetched".
+    denied_tools: [Edit]
+    timeout: 240000
+
+  # ---------------------------------------------------------------------------
   # Phase 1 — soft stack-health probe + hardware presence detect (parallel).
   # NOTE: We do not boot the stack here — the Archon worker container has no
   # docker socket and is not on seestar-net. We probe what we can reach
@@ -185,12 +252,16 @@ nodes:
       whether each is WORKING, STUBBED, BROKEN, or HARDWARE_REQUIRED.
 
       ## Inputs (artifacts from earlier nodes)
+      - `$ARTIFACTS_DIR/current-docs.json` — current canonical API references for
+        each detected dep (FastAPI, Streamlit, seestar_alp, Alpaca spec, …).
+        Use this to anchor your reasoning in real current API surfaces.
       - `$ARTIFACTS_DIR/stack-health.json` — which of the 3 services is reachable
       - `$ARTIFACTS_DIR/hardware.json` — `{hw_available: true|false, address: "..."}`
       - `$ARTIFACTS_DIR/alp-devices.json` — per-device reachability + connection
       - `$ARTIFACTS_DIR/backend-routes.json` — which FastAPI routes responded
 
-      Read those FIRST. They tell you what infrastructure is up.
+      Read those FIRST. They tell you what infrastructure is up and what
+      the current API contracts look like.
 
       ## Bases (use these in your curl probes)
       - JETSON_HOST: `${JETSON_HOST:-192.168.0.234}`
@@ -235,7 +306,7 @@ nodes:
 
       End your response with a one-line confirmation that the JSON is written.
     denied_tools: [Edit]
-    depends_on: [probe-stack-health, detect-hardware, probe-alp-devices, probe-backend-routes]
+    depends_on: [web-research, probe-stack-health, detect-hardware, probe-alp-devices, probe-backend-routes]
     trigger_rule: all_done
 
   - id: probe-stellarium
