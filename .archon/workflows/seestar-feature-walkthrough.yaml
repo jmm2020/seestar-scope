@@ -4,113 +4,156 @@ description: |
   what works vs what's broken vs what's stubbed.
   Triggers: "feature walkthrough", "probe seestar", "test all features",
             "feature audit", "walkthrough report", "exercise features".
-  Does: Boots the docker stack, probes ALP devices + backend routes + each
-        Streamlit view + Stellarium in parallel, then synthesizes a JSON +
-        markdown report. Optionally posts the markdown as a GitHub comment.
+  Does: Probes ALP devices + backend routes + each Streamlit view + Stellarium
+        + raw S50 hardware in parallel, then synthesizes a JSON + markdown
+        report. Optionally posts the markdown as a GitHub comment.
   NOT for: Modifying source code, capturing telescope frames, or fixing
            anything. Read-only — probe and report only.
 
 interactive: false
 
-# Read-only probe — runs against the live source. No worktree required;
-# its absence keeps state in artifacts/<run> only.
+# Read-only probe — runs against the live source. No worktree mutation.
 worktree:
   enabled: false
 
 nodes:
   # ---------------------------------------------------------------------------
-  # Phase 1 — parallel roots: boot the stack and detect hardware presence.
+  # Phase 1 — soft stack-health probe + hardware presence detect (parallel).
+  # NOTE: We do not boot the stack here — the Archon worker container has no
+  # docker socket and is not on seestar-net. We probe what we can reach
+  # (host-published ports + LAN) and report.
   # ---------------------------------------------------------------------------
-  - id: boot-stack
+  - id: probe-stack-health
     bash: |
-      set -e
-      echo "=== boot-stack ==="
-      cd "$BASE_DIR" 2>/dev/null || cd .
-      docker compose up -d
-      DEADLINE=$(( $(date +%s) + 60 ))
-      check_one() {
-        local svc="$1" probe="$2"
-        until curl -fsS "$probe" > /dev/null 2>&1; do
-          if [ "$(date +%s)" -gt "$DEADLINE" ]; then
-            echo "FAIL: $svc not healthy at $probe within 60s"
-            docker compose ps
-            exit 1
+      set +e
+      mkdir -p "$ARTIFACTS_DIR"
+      OUT="$ARTIFACTS_DIR/stack-health.json"
+
+      probe_one() {
+        local svc="$1"
+        shift
+        for url in "$@"; do
+          if curl -fsS -m 4 "$url" > /dev/null 2>&1; then
+            printf '{"service":"%s","reachable":true,"url":"%s"}' "$svc" "$url"
+            return 0
           fi
-          sleep 2
         done
-        echo "OK: $svc healthy at $probe"
+        printf '{"service":"%s","reachable":false,"tried":%s}' \
+          "$svc" "$(printf '%s\n' "$@" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')"
       }
-      check_one seestar-alp           "http://localhost:5555/management/apiversions" 2>&1 || \
-        check_one seestar-alp         "http://seestar-alp:5555/management/apiversions"
-      check_one seestar-portal-backend "http://localhost:8503/health" 2>&1 || \
-        check_one seestar-portal-backend "http://seestar-portal-backend:8503/health"
-      check_one seestar-portal-ui     "http://localhost:8502/_stcore/health" 2>&1 || \
-        check_one seestar-portal-ui   "http://seestar-portal-ui:8502/_stcore/health"
-      echo "=== boot-stack: all healthy ==="
-    timeout: 90000
+
+      JETSON_HOST="${JETSON_HOST:-192.168.0.234}"
+      echo "[" > "$OUT"
+      probe_one seestar-alp "http://${JETSON_HOST}:5555/management/apiversions" "http://localhost:5555/management/apiversions" >> "$OUT"
+      echo "," >> "$OUT"
+      probe_one seestar-portal-backend "http://${JETSON_HOST}:8503/health" "http://localhost:8503/health" >> "$OUT"
+      echo "," >> "$OUT"
+      probe_one seestar-portal-ui "http://${JETSON_HOST}:8502/_stcore/health" "http://localhost:8502/_stcore/health" >> "$OUT"
+      echo "" >> "$OUT"
+      echo "]" >> "$OUT"
+      cat "$OUT"
+      exit 0
+    timeout: 30000
 
   - id: detect-hardware
     bash: |
-      set -e
+      set +e
       IP="${SEESTAR_IP:-192.168.0.132}"
       PORT="${SEESTAR_PORT:-32323}"
+      mkdir -p "$ARTIFACTS_DIR"
+      OUT="$ARTIFACTS_DIR/hardware.json"
       echo "Probing $IP:$PORT (2s timeout)..."
       if timeout 2 bash -c "</dev/tcp/$IP/$PORT" 2>/dev/null; then
-        echo "HW_AVAILABLE=true"
-        echo "REACHED $IP:$PORT"
+        echo "{\"hw_available\": true, \"address\": \"$IP:$PORT\"}" > "$OUT"
+        echo "HW_AVAILABLE=true (S50 reachable at $IP:$PORT)"
       else
-        echo "HW_AVAILABLE=false"
-        echo "Hardware not reachable at $IP:$PORT — hardware-only probes will skip"
+        echo "{\"hw_available\": false, \"address\": \"$IP:$PORT\"}" > "$OUT"
+        echo "HW_AVAILABLE=false (S50 not reachable at $IP:$PORT)"
       fi
+      exit 0
     timeout: 5000
 
   # ---------------------------------------------------------------------------
-  # Phase 2 — parallel probes (depend on boot-stack; detect-hardware advisory).
+  # Phase 2 — parallel probes. All depend on probe-stack-health for ordering,
+  # but use trigger_rule: all_done so they run regardless of stack-probe result.
   # ---------------------------------------------------------------------------
   - id: probe-alp-devices
     bash: |
-      set -e
-      ALP="${ALP_BASE:-http://localhost:5555}"
+      set +e
+      JETSON_HOST="${JETSON_HOST:-192.168.0.234}"
       mkdir -p "$ARTIFACTS_DIR"
       OUT="$ARTIFACTS_DIR/alp-devices.json"
+
+      # Try host-published port first, then container DNS (works only if Archon
+      # worker is co-resident on seestar-net — usually false but cheap to try).
+      ALP_BASE=""
+      for base in "http://${JETSON_HOST}:5555" "http://seestar-alp:5555" "http://localhost:5555"; do
+        if curl -fsS -m 4 "${base}/management/apiversions" > /dev/null 2>&1; then
+          ALP_BASE="$base"
+          break
+        fi
+      done
+
       echo "[" > "$OUT"
       first=1
       for dev in telescope camera focuser filterwheel switch; do
         REACHABLE=false; CONNECTED=null; NAME=""; ERR=""
-        if RESP=$(curl -fsS -m 5 "$ALP/api/v1/$dev/0/connected" 2>&1); then
-          REACHABLE=true
-          CONNECTED=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('Value','null'))" 2>/dev/null || echo null)
-          NAME=$(curl -fsS -m 5 "$ALP/api/v1/$dev/0/name" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('Value',''))" 2>/dev/null || echo "")
+        if [ -n "$ALP_BASE" ]; then
+          if RESP=$(curl -fsS -m 5 "${ALP_BASE}/api/v1/${dev}/0/connected" 2>&1); then
+            REACHABLE=true
+            CONNECTED=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('Value','null'))" 2>/dev/null || echo null)
+            NAME=$(curl -fsS -m 5 "${ALP_BASE}/api/v1/${dev}/0/name" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('Value',''))" 2>/dev/null || echo "")
+          else
+            ERR=$(echo "$RESP" | head -c 200 | tr '"' "'")
+          fi
         else
-          ERR=$(echo "$RESP" | head -c 200 | tr '"' "'" )
+          ERR="ALP base URL unreachable from worker"
         fi
         [ "$first" -eq 0 ] && echo "," >> "$OUT"
         first=0
-        printf '  {"device":"%s","reachable":%s,"connected":%s,"name":"%s","error":"%s"}' \
-          "$dev" "$REACHABLE" "$CONNECTED" "$NAME" "$ERR" >> "$OUT"
+        printf '  {"device":"%s","reachable":%s,"connected":%s,"name":"%s","error":"%s","alp_base":"%s"}' \
+          "$dev" "$REACHABLE" "$CONNECTED" "$NAME" "$ERR" "$ALP_BASE" >> "$OUT"
       done
       echo "" >> "$OUT"
       echo "]" >> "$OUT"
       cat "$OUT"
-    depends_on: [boot-stack]
+      exit 0
+    depends_on: [probe-stack-health]
+    trigger_rule: all_done
     timeout: 60000
 
   - id: probe-backend-routes
     bash: |
-      set -e
-      BACKEND="${BACKEND_BASE:-http://localhost:8503}"
+      set +e
+      JETSON_HOST="${JETSON_HOST:-192.168.0.234}"
       mkdir -p "$ARTIFACTS_DIR"
       OUT="$ARTIFACTS_DIR/backend-routes.json"
-      OPEN=$(curl -fsS -m 5 "$BACKEND/openapi.json" 2>/dev/null || echo "")
-      if [ -z "$OPEN" ]; then
-        echo '{"error":"openapi not reachable","routes":[]}' > "$OUT"
+
+      BACKEND_BASE=""
+      for base in "http://${JETSON_HOST}:8503" "http://seestar-portal-backend:8503" "http://localhost:8503"; do
+        if curl -fsS -m 4 "${base}/health" > /dev/null 2>&1; then
+          BACKEND_BASE="$base"
+          break
+        fi
+      done
+
+      if [ -z "$BACKEND_BASE" ]; then
+        echo '{"reachable":false,"error":"backend not reachable from worker on any tried base","routes":[]}' > "$OUT"
         cat "$OUT"
         exit 0
       fi
+
+      OPEN=$(curl -fsS -m 5 "${BACKEND_BASE}/openapi.json" 2>/dev/null || echo "")
+      if [ -z "$OPEN" ]; then
+        echo "{\"reachable\":true,\"backend_base\":\"$BACKEND_BASE\",\"error\":\"openapi not reachable\",\"routes\":[]}" > "$OUT"
+        cat "$OUT"
+        exit 0
+      fi
+
       cat > /tmp/probe-routes.py << 'PY'
       import json, sys, urllib.request, time, os
       spec = json.load(sys.stdin)
-      backend = os.environ.get('BACKEND_BASE','http://localhost:8503')
+      backend = os.environ.get('BACKEND_BASE','')
       results = []
       for path, methods in (spec.get('paths') or {}).items():
           if any(seg in path for seg in ('{', 'admin', 'shutdown')):
@@ -125,47 +168,56 @@ nodes:
                   results.append({'path': path, 'status': r.status, 'ms': int((time.time()-t0)*1000), 'error': ''})
           except Exception as e:
               results.append({'path': path, 'status': 0, 'ms': int((time.time()-t0)*1000), 'error': str(e)[:200]})
-      json.dump({'routes': results}, sys.stdout, indent=2)
+      json.dump({'reachable': True, 'backend_base': backend, 'routes': results}, sys.stdout, indent=2)
       PY
-      echo "$OPEN" | python3 /tmp/probe-routes.py > "$OUT"
+      BACKEND_BASE="$BACKEND_BASE" echo "$OPEN" | BACKEND_BASE="$BACKEND_BASE" python3 /tmp/probe-routes.py > "$OUT"
       cat "$OUT"
-    depends_on: [boot-stack]
+      exit 0
+    depends_on: [probe-stack-health]
+    trigger_rule: all_done
     timeout: 120000
 
   - id: probe-each-view
     model: sonnet
-    allowed_tools: [Read, Bash, Glob]
+    allowed_tools: [Read, Bash, Glob, Write]
     prompt: |
       You are exercising every Streamlit view in `portal/views/*.py` to determine
-      whether each view is WORKING, STUBBED, BROKEN, or HARDWARE_REQUIRED.
+      whether each is WORKING, STUBBED, BROKEN, or HARDWARE_REQUIRED.
 
-      ## Inputs
-      - `boot-stack` is OK (services are healthy).
-      - `detect-hardware` output: `$detect-hardware.output` — look for `HW_AVAILABLE=true|false`.
-      - ALP base: `${ALP_BASE:-http://localhost:5555}`
-      - Backend base: `${BACKEND_BASE:-http://localhost:8503}`
+      ## Inputs (artifacts from earlier nodes)
+      - `$ARTIFACTS_DIR/stack-health.json` — which of the 3 services is reachable
+      - `$ARTIFACTS_DIR/hardware.json` — `{hw_available: true|false, address: "..."}`
+      - `$ARTIFACTS_DIR/alp-devices.json` — per-device reachability + connection
+      - `$ARTIFACTS_DIR/backend-routes.json` — which FastAPI routes responded
+
+      Read those FIRST. They tell you what infrastructure is up.
+
+      ## Bases (use these in your curl probes)
+      - JETSON_HOST: `${JETSON_HOST:-192.168.0.234}`
+      - Backend: try `http://${JETSON_HOST}:8503` then `http://localhost:8503`
+      - ALP: try `http://${JETSON_HOST}:5555` then `http://localhost:5555`
+      - Raw S50 ALPACA: `http://${SEESTAR_IP:-192.168.0.132}:32323`
 
       ## What to do for each view file
       1. Read the source of `portal/views/<view>.py`.
-      2. Identify the HTTP/ALPACA endpoints it calls (look for `requests.`, `httpx.`,
-         `alpaca.`, `backend.`, hard-coded URLs).
-      3. For non-hardware-only endpoints, exercise them via `curl` against ALP /
-         backend bases above.
-      4. If a call requires real telescope data and `HW_AVAILABLE=false`, classify
-         as `HARDWARE_REQUIRED` (not BROKEN).
-      5. If the view is mostly placeholder or `st.info("coming soon")`-style, mark
-         as `STUBBED`.
+      2. Identify the HTTP/ALPACA endpoints it calls.
+      3. For each non-hardware-only call, exercise it via `curl` against the
+         appropriate base. Use the artifact JSON to pick a base that's known up.
+      4. If a call requires real telescope state and `hw_available=false`,
+         classify the affected feature as `HARDWARE_REQUIRED` (not BROKEN).
+      5. If the view is mostly placeholder (`st.info("coming soon")`-style),
+         mark `STUBBED`.
 
       ## Status rubric
-      - `WORKING` — view's endpoints respond 2xx with sensible bodies.
+      - `WORKING` — the view's endpoints respond 2xx with sensible bodies.
       - `STUBBED` — view code is mostly placeholder; few/no real calls.
       - `BROKEN` — view's endpoints exist but return 4xx/5xx, time out, or the
-        view imports fail.
-      - `HARDWARE_REQUIRED` — view depends on the live S50; can't be assessed.
+        view's imports / required services are down.
+      - `HARDWARE_REQUIRED` — feature depends on the live S50 and HW is absent.
 
       ## Output
-      Write to `$ARTIFACTS_DIR/views.json` a JSON object exactly like:
-      ```
+      Write to `$ARTIFACTS_DIR/views.json`:
+      ```json
       {
         "views": [
           {
@@ -178,29 +230,34 @@ nodes:
       }
       ```
       Cover all 11 views: dashboard, live_status, skymap, goto, imaging, focus,
-      autofocus, platesolve, sequence, gallery, settings, theme. (Theme is
-      pure CSS; mark it WORKING if it imports cleanly.)
+      autofocus, platesolve, sequence, gallery, settings. (theme.py is pure CSS;
+      skip or mark WORKING if it imports cleanly.)
 
-      End your response with the path to the JSON file you wrote.
-    denied_tools: [Edit, Write]
-    depends_on: [boot-stack]
+      End your response with a one-line confirmation that the JSON is written.
+    denied_tools: [Edit]
+    depends_on: [probe-stack-health, detect-hardware, probe-alp-devices, probe-backend-routes]
+    trigger_rule: all_done
 
   - id: probe-stellarium
     bash: |
+      set +e
       HOST="${STELLARIUM_HOST:-localhost}"
       PORT="${STELLARIUM_PORT:-8091}"
       mkdir -p "$ARTIFACTS_DIR"
-      if curl -fsS -m 3 "http://$HOST:$PORT/api/main/status" > "$ARTIFACTS_DIR/stellarium.json" 2>/dev/null; then
+      OUT="$ARTIFACTS_DIR/stellarium.json"
+      if curl -fsS -m 3 "http://$HOST:$PORT/api/main/status" > "$OUT" 2>/dev/null; then
         echo "Stellarium OK at $HOST:$PORT"
       else
-        echo '{"reachable": false, "host":"'"$HOST"'","port":'"$PORT"'}' > "$ARTIFACTS_DIR/stellarium.json"
+        echo "{\"reachable\": false, \"host\":\"$HOST\",\"port\":$PORT}" > "$OUT"
         echo "Stellarium not reachable at $HOST:$PORT — soft fail (optional dep)"
       fi
-    depends_on: [boot-stack]
+      exit 0
+    depends_on: [probe-stack-health]
+    trigger_rule: all_done
     timeout: 5000
 
   # ---------------------------------------------------------------------------
-  # Phase 3 — synthesize. Runs even if individual probes failed (all_done).
+  # Phase 3 — synthesize. Runs even if probes had failures (all_done).
   # ---------------------------------------------------------------------------
   - id: synthesize-report
     model: sonnet
@@ -208,21 +265,21 @@ nodes:
     prompt: |
       You are synthesizing the Seestar Scope feature walkthrough report.
 
-      ## Source artifacts
-      - `$ARTIFACTS_DIR/alp-devices.json` (from probe-alp-devices)
-      - `$ARTIFACTS_DIR/backend-routes.json` (from probe-backend-routes)
-      - `$ARTIFACTS_DIR/views.json` (from probe-each-view)
-      - `$ARTIFACTS_DIR/stellarium.json` (from probe-stellarium)
-      - Hardware availability: `$detect-hardware.output`
-
-      Some artifacts may be missing (probe failures) — handle gracefully.
+      ## Source artifacts (read all that exist; missing = probe failed, note it)
+      - `$ARTIFACTS_DIR/stack-health.json`
+      - `$ARTIFACTS_DIR/hardware.json`
+      - `$ARTIFACTS_DIR/alp-devices.json`
+      - `$ARTIFACTS_DIR/backend-routes.json`
+      - `$ARTIFACTS_DIR/views.json`
+      - `$ARTIFACTS_DIR/stellarium.json`
 
       ## Output 1: structured JSON
-      Write `$ARTIFACTS_DIR/feature-walkthrough.json` shaped:
+      Write `$ARTIFACTS_DIR/feature-walkthrough.json`:
       ```json
       {
         "run_at": "<iso8601>",
         "hardware_available": true,
+        "stack_health": {"seestar-alp": true, "seestar-portal-backend": false, ...},
         "features": [
           {
             "feature": "GoTo view",
@@ -232,47 +289,51 @@ nodes:
             "suggested_issue_title": "GoTo view: slew API returns 500 against live S50"
           }
         ],
-        "summary_counts": {"WORKING":N, "STUBBED":N, "BROKEN":N, "HARDWARE_REQUIRED":N}
+        "summary_counts": {"WORKING":N, "STUBBED":N, "BROKEN":N, "HARDWARE_REQUIRED":N},
+        "root_causes": [
+          {"description": "seestar-alp container not running", "affected_features": [...]}
+        ]
       }
       ```
 
       ## Output 2: markdown summary
-      Write `$ARTIFACTS_DIR/feature-walkthrough.md` with:
+      Write `$ARTIFACTS_DIR/feature-walkthrough.md`:
       - H1: `# Seestar Feature Walkthrough — <date>`
       - One-line summary counts.
+      - Root cause section (group features by shared cause).
       - A table sorted by severity (BROKEN first, then HARDWARE_REQUIRED, STUBBED, WORKING):
 
         | Feature | Status | Evidence | Suggested Issue Title |
 
-      End your response by printing the markdown table inline (so it's visible in chat).
+      End your response by printing the markdown table inline so it's visible
+      in the chat transcript even if the artifact files are lost.
     denied_tools: [Edit]
     depends_on: [probe-alp-devices, probe-backend-routes, probe-each-view, probe-stellarium]
     trigger_rule: all_done
 
   # ---------------------------------------------------------------------------
-  # Phase 4 — optional GitHub posting (gated on POST_GH_COMMENT=1).
+  # Phase 4 — optional GitHub posting. Inline env gate (no separate gate node).
   # ---------------------------------------------------------------------------
-  - id: check-post-flag
-    bash: |
-      if [ "${POST_GH_COMMENT:-0}" = "1" ]; then
-        echo "POST_GH_COMMENT=1 — proceeding to post-summary"
-        exit 0
-      else
-        echo "POST_GH_COMMENT not set — skipping post-summary"
-        exit 1
-      fi
-    depends_on: [synthesize-report]
-    trigger_rule: all_success
-
   - id: post-summary
     model: haiku
     allowed_tools: [Read, Bash]
     prompt: |
-      Post the feature-walkthrough markdown report to GitHub.
+      Post the feature-walkthrough markdown report to GitHub — but ONLY if
+      `POST_GH_COMMENT=1` is set in env. Otherwise print "POST_GH_COMMENT not
+      set — skipping" and stop.
 
-      Read: `$ARTIFACTS_DIR/feature-walkthrough.md`
+      Read the env var first:
+      ```bash
+      if [ "${POST_GH_COMMENT:-0}" != "1" ]; then
+        echo "POST_GH_COMMENT not set — skipping post-summary"
+        exit 0
+      fi
+      ```
 
-      Two modes (decide from env):
+      If posting:
+      Read `$ARTIFACTS_DIR/feature-walkthrough.md`.
+
+      Two modes:
       - If `GH_ISSUE_NUMBER` is set, comment on that issue:
           `gh issue comment $GH_ISSUE_NUMBER --repo jmm2020/seestar-scope --body-file $ARTIFACTS_DIR/feature-walkthrough.md`
       - Otherwise, open a new issue:
@@ -280,7 +341,7 @@ nodes:
              --title "Feature walkthrough — $(date -I)" \
              --body-file $ARTIFACTS_DIR/feature-walkthrough.md`
 
-      Print the resulting URL.
+      Print the resulting URL (or the skip message).
     denied_tools: [Edit, Write]
-    depends_on: [check-post-flag]
-    trigger_rule: all_success
+    depends_on: [synthesize-report]
+    trigger_rule: all_done
