@@ -316,7 +316,7 @@ def _render_mount_controls(alpaca):
     alp_up = _check_alp_reachable()
     if not alp_up:
         st.warning(
-            f"⚠️ Mount control unavailable — seestar-alp is not reachable at "
+            f"Mount control unavailable — seestar-alp is not reachable at "
             f"{SEESTAR_ALP_URL}. Open / Park / Stop commands require this service."
         )
     col_open, col_park, col_stop, col_track = st.columns(4)

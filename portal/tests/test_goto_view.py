@@ -22,6 +22,12 @@ def test_alp_unreachable_on_connection_error():
         assert _check_alp_reachable() is False
 
 
+def test_alp_unreachable_on_timeout():
+    with patch("views.goto.requests.get",
+               side_effect=requests.exceptions.Timeout("timed out")):
+        assert _check_alp_reachable() is False
+
+
 def test_alp_unreachable_on_non_200():
     mock_resp = MagicMock()
     mock_resp.status_code = 503
