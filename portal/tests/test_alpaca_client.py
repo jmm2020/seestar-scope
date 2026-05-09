@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -198,7 +199,6 @@ def test_is_alp_available_true_on_http_error_response():
 
 def test_is_alp_available_logs_on_failure():
     """Probe failure is logged at DEBUG level with URL context."""
-    import requests
     client = AlpacaClient()
     with patch.object(client.session, "get", side_effect=requests.exceptions.ConnectionError("refused")), \
          patch("clients.alpaca_client.logger") as mock_logger:
@@ -208,19 +208,8 @@ def test_is_alp_available_logs_on_failure():
     assert "is_alp_available" in mock_logger.debug.call_args.args[0]
 
 
-def test_is_alp_available_connection_error():
-    client = AlpacaClient()
-    import requests
-    with patch.object(
-        client.session, "get",
-        side_effect=requests.exceptions.ConnectionError("refused"),
-    ):
-        assert client.is_alp_available() is False
-
-
 def test_is_alp_available_timeout():
     client = AlpacaClient()
-    import requests
     with patch.object(
         client.session, "get",
         side_effect=requests.exceptions.Timeout("timed out"),
