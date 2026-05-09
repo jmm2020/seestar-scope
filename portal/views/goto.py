@@ -20,6 +20,10 @@ SEESTAR_ALP_URL = (
     f":{os.environ.get('ALP_PORT', '5555')}"
 )
 
+# Seconds to wait for a scope state transition after dispatching a command.
+# Increase if your scope is slow to respond (e.g. on a cold boot).
+VERIFY_TIMEOUT_S = int(os.environ.get("SCOPE_VERIFY_TIMEOUT", "15"))
+
 
 def _seestar_action(method: str, params: dict = None, async_mode: bool = True) -> dict:
     """Send a JSON-RPC command to the Seestar via seestar_alp's action endpoint.
@@ -64,6 +68,24 @@ def _check_alp_reachable() -> bool:
         return resp.status_code == 200
     except Exception:
         return False
+
+
+def _poll_state_transition(alpaca, predicate, timeout_s: int = VERIFY_TIMEOUT_S) -> bool:
+    """Poll telescope state until predicate returns True or timeout_s elapses.
+
+    Returns True if the transition was observed, False on timeout.
+    Polls every 1 second; each GET to the ALPACA bridge is fast (~50ms).
+    """
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            status = alpaca.get_telescope_status()
+            if predicate(status):
+                return True
+        except Exception:
+            pass
+        time.sleep(1)
+    return False
 
 
 # Popular quick-access targets
@@ -331,13 +353,23 @@ def _render_mount_controls(alpaca):
                 "iscope_start_view",
                 params={"params": {"mode": "star"}},
             )
-            if result["success"]:
-                st.success("Open command sent — arm is unfolding "
-                           "(give it 10-15 seconds, then refresh Dashboard)")
-                time.sleep(2)
-                st.rerun()
-            else:
+            if not result["success"]:
                 st.error(f"Open failed: {result['error']}")
+            else:
+                with st.spinner(f"Waiting for scope to open (up to {VERIFY_TIMEOUT_S}s)..."):
+                    transitioned = _poll_state_transition(
+                        alpaca,
+                        lambda s: not s.get("at_park") and not s.get("at_home"),
+                    )
+                if transitioned:
+                    st.success("Scope opened — arm is unfolded and ready.")
+                    st.rerun()
+                else:
+                    st.error(
+                        "Command sent but scope didn't leave HOME/park state. "
+                        "It may be powered off, in HOME state with no power, or "
+                        "firmware rejected the command. Check the Seestar app."
+                    )
     with col_park:
         if st.button("Park (Close)", use_container_width=True,
                      disabled=not alp_up,
@@ -345,10 +377,22 @@ def _render_mount_controls(alpaca):
                           "Note: may not work on all firmware versions. "
                           "Use the Seestar app to park if this doesn't respond."):
             result = _seestar_action("scope_park")
-            if result["success"]:
-                st.success("Park command sent — check if arm is closing")
-            else:
+            if not result["success"]:
                 st.error(f"Park failed: {result['error']}")
+            else:
+                with st.spinner(f"Waiting for scope to park (up to {VERIFY_TIMEOUT_S}s)..."):
+                    transitioned = _poll_state_transition(
+                        alpaca,
+                        lambda s: s.get("at_park"),
+                    )
+                if transitioned:
+                    st.success("Scope parked — arm is closed.")
+                    st.rerun()
+                else:
+                    st.error(
+                        "Command sent but scope didn't reach park state. "
+                        "Try the Seestar app to park manually."
+                    )
     with col_stop:
         if st.button("Stop Slew", use_container_width=True,
                      disabled=not alp_up,
@@ -356,12 +400,22 @@ def _render_mount_controls(alpaca):
                           "Uses the stop_goto_target action."):
             result = _seestar_action("iscope_stop_view",
                                      params={"stage": "AutoGoto"})
-            if result["success"]:
-                st.success("Stop command sent")
-                time.sleep(1)
-                st.rerun()
-            else:
+            if not result["success"]:
                 st.error(f"Stop failed: {result['error']}")
+            else:
+                with st.spinner(f"Waiting for slew to stop (up to {VERIFY_TIMEOUT_S}s)..."):
+                    transitioned = _poll_state_transition(
+                        alpaca,
+                        lambda s: not s.get("slewing"),
+                    )
+                if transitioned:
+                    st.success("Slew stopped.")
+                    st.rerun()
+                else:
+                    st.error(
+                        "Command sent but scope is still reporting slewing=True. "
+                        "Check the Seestar app."
+                    )
     with col_track:
         try:
             status = alpaca.get_telescope_status()
