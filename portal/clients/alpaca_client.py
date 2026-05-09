@@ -264,11 +264,19 @@ class AlpacaClient:
             return None
 
     def is_alp_available(self, timeout: int = 2) -> bool:
-        """Return True if the seestar_alp bridge is reachable."""
+        """Return True if the seestar_alp bridge is reachable (any HTTP response).
+
+        Performs a GET to alp_base_url; any HTTP response (including 4xx/5xx)
+        counts as reachable — only network-level failures return False.
+
+        Args:
+            timeout: Seconds before the probe is considered failed (default 2).
+        """
         try:
             self.session.get(self.alp_base_url, timeout=timeout)
             return True
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"is_alp_available probe failed ({self.alp_base_url}): {e}")
             return False
 
     # --- Live View & Stacking ---

@@ -118,7 +118,10 @@ def _render_session_status(alpaca):
 # --- Stacking Controls ---
 
 def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = True):
-    """Gain, exposure, LP filter, and start/stop/restart buttons."""
+    """Gain, exposure, LP filter, and start/stop/restart buttons.
+
+    Stack action buttons are disabled when alp_available is False.
+    """
     st.subheader("Stacking Controls")
 
     current_gain = view.get("gain", 80) if view else 80

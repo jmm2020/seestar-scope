@@ -123,4 +123,4 @@ def test_stacking_controls_receive_alp_available_flag(monkeypatch):
         from views.imaging import render_imaging
         render_imaging(client, MagicMock())
 
-    assert captured_args["args"][-1] is False
+    assert captured_args["args"][3] is False  # alp_available is the 4th positional arg

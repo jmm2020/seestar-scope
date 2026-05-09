@@ -182,8 +182,30 @@ def test_is_alp_available_true():
     client = AlpacaClient()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
+    with patch.object(client.session, "get", return_value=mock_resp) as mock_get:
+        assert client.is_alp_available() is True
+    mock_get.assert_called_once_with(client.alp_base_url, timeout=2)
+
+
+def test_is_alp_available_true_on_http_error_response():
+    """Service counts as reachable when HTTP layer responds, even with error status."""
+    client = AlpacaClient()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 503
     with patch.object(client.session, "get", return_value=mock_resp):
         assert client.is_alp_available() is True
+
+
+def test_is_alp_available_logs_on_failure():
+    """Probe failure is logged at DEBUG level with URL context."""
+    import requests
+    client = AlpacaClient()
+    with patch.object(client.session, "get", side_effect=requests.exceptions.ConnectionError("refused")), \
+         patch("clients.alpaca_client.logger") as mock_logger:
+        result = client.is_alp_available()
+    assert result is False
+    mock_logger.debug.assert_called_once()
+    assert "is_alp_available" in mock_logger.debug.call_args.args[0]
 
 
 def test_is_alp_available_connection_error():
