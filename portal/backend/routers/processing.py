@@ -31,7 +31,7 @@ import httpx
 
 from backend.app.services.siril_service import SirilService, ProcessingStatus, ProcessingResult
 
-router = APIRouter(prefix="/api/processing", tags=["processing"])
+router = APIRouter(tags=["processing"])
 
 # Initialize Siril service
 # Output goes to gallery directory for Lal's gallery to index

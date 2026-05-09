@@ -278,6 +278,41 @@ class GalleryDatabase:
             stacked_count=row['stacked']
         )
 
+    def get_by_id(self, image_id: int) -> "Optional[ImageRecord]":
+        """Fetch a single image record by primary key."""
+        import json
+        cursor = self.conn.execute("SELECT * FROM images WHERE id = ?", (image_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        metadata = ImageMetadata(
+            target=row['target'],
+            exposure=row['exposure'],
+            gain=row['gain'],
+            filter=row['filter'],
+            ra=row['ra'],
+            dec=row['dec'],
+            temperature=row['temperature'],
+            binning=row['binning'],
+            observer=row['observer'],
+            telescope=row['telescope']
+        )
+        return ImageRecord(
+            id=row['id'],
+            fits_path=row['fits_path'],
+            png_path=row['png_path'],
+            session_id=row['session_id'],
+            captured_at=datetime.fromisoformat(row['captured_at']),
+            metadata=metadata,
+            processed=bool(row['processed']),
+            processed_path=row['processed_path'],
+            stacked=bool(row['stacked']),
+            stack_id=row['stack_id'],
+            tags=json.loads(row['tags']) if row['tags'] else [],
+            notes=row['notes'],
+            quality_score=row['quality_score']
+        )
+
     def update_processing_status(self, image_id: int, processed_path: str):
         """Mark image as processed and record output path."""
         self.conn.execute("""
