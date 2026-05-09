@@ -12,6 +12,9 @@ services:
     volumes:
       - captures-data:/home/seestar/seestar_alp/captures
       - sessions-data:/home/seestar/seestar_alp/sessions
+      # Override vendored config so ALP binds 0.0.0.0 (reachable from
+      # other compose services) instead of the upstream default 127.0.0.1.
+      - ./alp-config/config.toml:/home/seestar/seestar_alp/device/config.toml:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5555/management/apiversions"]
       interval: 30s
