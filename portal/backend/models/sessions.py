@@ -11,7 +11,7 @@ begins, ended_at when stopped, with all captured frames and stacks linked to it.
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -39,6 +39,8 @@ class SessionRecord(BaseModel):
         None, description="{seeing, transparency, temp}"
     )
     created_at: Optional[datetime] = Field(None, description="DB row creation time")
+    frame_count: Optional[int] = Field(None, description="Frame count — set when include_frame_counts=true")
+    total_exposure_s: Optional[float] = Field(None, description="Total exposure seconds — set when include_frame_counts=true")
 
 
 class FrameRecord(BaseModel):
@@ -182,8 +184,18 @@ class SessionDatabase:
 
     def _init_schema(self):
         self.conn.executescript(self.SCHEMA)
+        # executescript() already commits; PRAGMA is a connection-level setting, not transactional
         self.conn.execute("PRAGMA foreign_keys = ON")
-        self.conn.commit()
+
+    @staticmethod
+    def _safe_json(value: Optional[str], row_id: int = 0, field: str = "") -> Optional[dict]:
+        if not value:
+            return None
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            logger.warning(f"Corrupt JSON in row {row_id} field {field!r} — skipping")
+            return None
 
     def _row_to_session(self, row) -> SessionRecord:
         return SessionRecord(
@@ -193,10 +205,10 @@ class SessionDatabase:
             target_dec=row["target_dec"],
             started_at=datetime.fromisoformat(row["started_at"]),
             ended_at=datetime.fromisoformat(row["ended_at"]) if row["ended_at"] else None,
-            site_location=json.loads(row["site_location"]) if row["site_location"] else None,
-            conditions_snapshot=json.loads(row["conditions_snapshot"])
-            if row["conditions_snapshot"]
-            else None,
+            site_location=self._safe_json(row["site_location"], row["id"], "site_location"),
+            conditions_snapshot=self._safe_json(
+                row["conditions_snapshot"], row["id"], "conditions_snapshot"
+            ),
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
         )
 
@@ -209,7 +221,7 @@ class SessionDatabase:
             gain=row["gain"],
             filter=row["filter"],
             captured_at=datetime.fromisoformat(row["captured_at"]),
-            alpaca_metadata=json.loads(row["alpaca_metadata"]) if row["alpaca_metadata"] else None,
+            alpaca_metadata=self._safe_json(row["alpaca_metadata"], row["id"], "alpaca_metadata"),
         )
 
     def _row_to_stack(self, row) -> StackRecord:
@@ -219,9 +231,9 @@ class SessionDatabase:
             output_path=row["output_path"],
             frame_count=row["frame_count"],
             algorithm=row["algorithm"],
-            applied_calibration_ids=json.loads(row["applied_calibration_ids"])
-            if row["applied_calibration_ids"]
-            else None,
+            applied_calibration_ids=self._safe_json(
+                row["applied_calibration_ids"], row["id"], "applied_calibration_ids"
+            ),
         )
 
     def create_session(
@@ -233,7 +245,7 @@ class SessionDatabase:
         conditions_snapshot: Optional[Dict[str, Any]] = None,
     ) -> int:
         """Insert a new session row. Returns the new session ID."""
-        started_at = datetime.utcnow().isoformat()
+        started_at = datetime.now(timezone.utc).isoformat()
         cursor = self.conn.execute(
             """
             INSERT INTO sessions (
@@ -259,7 +271,7 @@ class SessionDatabase:
         conditions_snapshot: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Mark session as ended. Returns True if a row was updated."""
-        ended_at = datetime.utcnow().isoformat()
+        ended_at = datetime.now(timezone.utc).isoformat()
         if conditions_snapshot is not None:
             cursor = self.conn.execute(
                 "UPDATE sessions SET ended_at = ?, conditions_snapshot = ? WHERE id = ?",
@@ -279,13 +291,13 @@ class SessionDatabase:
         filename: str,
         exposure_s: float,
         gain: int,
-        filter: str,
+        filter_name: str,
         captured_at: Optional[datetime] = None,
         alpaca_metadata: Optional[Dict[str, Any]] = None,
     ) -> int:
         """Insert a frame row. Returns the new frame ID."""
         if captured_at is None:
-            captured_at = datetime.utcnow()
+            captured_at = datetime.now(timezone.utc)
         cursor = self.conn.execute(
             """
             INSERT INTO frames (
@@ -298,7 +310,7 @@ class SessionDatabase:
                 filename,
                 exposure_s,
                 gain,
-                filter,
+                filter_name,
                 captured_at.isoformat(),
                 json.dumps(alpaca_metadata) if alpaca_metadata else None,
             ),
@@ -358,12 +370,30 @@ class SessionDatabase:
         return [self._row_to_frame(row) for row in cursor.fetchall()]
 
     def get_stacks(self, session_id: int) -> List[StackRecord]:
-        """Return all stacks for a session."""
+        """Return all stacks for a session, oldest-first."""
         cursor = self.conn.execute(
             "SELECT * FROM stacks WHERE session_id = ? ORDER BY id ASC",
             (session_id,),
         )
         return [self._row_to_stack(row) for row in cursor.fetchall()]
+
+    def get_session_summaries(self, session_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """Return per-session frame count and total exposure in one query."""
+        if not session_ids:
+            return {}
+        placeholders = ",".join("?" * len(session_ids))
+        cursor = self.conn.execute(
+            f"SELECT session_id, COUNT(*) as frame_count, COALESCE(SUM(exposure_s), 0.0) as total_exposure_s "
+            f"FROM frames WHERE session_id IN ({placeholders}) GROUP BY session_id",
+            session_ids,
+        )
+        return {
+            row["session_id"]: {
+                "frame_count": row["frame_count"],
+                "total_exposure_s": row["total_exposure_s"],
+            }
+            for row in cursor.fetchall()
+        }
 
     def close(self):
         """Close database connection."""

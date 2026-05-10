@@ -25,24 +25,30 @@ class SessionsClient:
         self.timeout = timeout
         self.session = requests.Session()
 
-    def _post(self, path: str, payload: Dict[str, Any]) -> Optional[requests.Response]:
+    def _post(self, path: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         url = f"{self.backend_url}{path}"
         try:
             resp = self.session.post(url, json=payload, timeout=self.timeout)
             resp.raise_for_status()
-            return resp
+            return resp.json()
         except requests.exceptions.RequestException as e:
             logger.warning(f"Sessions POST {url} failed: {e}")
             return None
+        except ValueError as e:
+            logger.warning(f"Sessions POST {url} returned non-JSON: {e}")
+            return None
 
-    def _get(self, path: str) -> Optional[requests.Response]:
+    def _get(self, path: str) -> Optional[Dict[str, Any]]:
         url = f"{self.backend_url}{path}"
         try:
             resp = self.session.get(url, timeout=self.timeout)
             resp.raise_for_status()
-            return resp
+            return resp.json()
         except requests.exceptions.RequestException as e:
             logger.warning(f"Sessions GET {url} failed: {e}")
+            return None
+        except ValueError as e:
+            logger.warning(f"Sessions GET {url} returned non-JSON: {e}")
             return None
 
     def start_session(
@@ -64,13 +70,12 @@ class SessionsClient:
             "site_location": site_location,
             "conditions_snapshot": conditions_snapshot,
         }
-        resp = self._post("/api/sessions/", payload)
-        if resp is None:
+        session = self._post("/api/sessions/", payload)
+        if session is None:
             return None
-        session = resp.json()
 
         verify = self._get(f"/api/sessions/{session['id']}")
-        if verify is None or verify.status_code != 200:
+        if verify is None:
             logger.error(f"Session start verification failed for id={session.get('id')}")
             return None
         return session
@@ -82,17 +87,15 @@ class SessionsClient:
     ) -> Optional[Dict[str, Any]]:
         """Mark a session ended. Verifies ended_at is set on round-trip."""
         payload = {"conditions_snapshot": conditions_snapshot}
-        resp = self._post(f"/api/sessions/{session_id}/end", payload)
-        if resp is None:
+        session = self._post(f"/api/sessions/{session_id}/end", payload)
+        if session is None:
             return None
-        session = resp.json()
 
         verify = self._get(f"/api/sessions/{session_id}")
-        if verify is None or verify.status_code != 200:
+        if verify is None:
             logger.error(f"Session end verification failed for id={session_id}")
             return None
-        verified = verify.json()
-        if verified.get("ended_at") is None:
+        if verify.get("ended_at") is None:
             logger.error(f"Session {session_id} ended_at was not persisted")
             return None
         return session
@@ -116,28 +119,24 @@ class SessionsClient:
             "captured_at": captured_at.isoformat() if captured_at else None,
             "alpaca_metadata": alpaca_metadata,
         }
-        resp = self._post(f"/api/sessions/{session_id}/frames", payload)
-        if resp is None:
-            return None
-        return resp.json()
+        return self._post(f"/api/sessions/{session_id}/frames", payload)
 
-    def list_sessions(self, limit: int = 50, offset: int = 0) -> Optional[List[Dict[str, Any]]]:
+    def list_sessions(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        include_frame_counts: bool = False,
+    ) -> Optional[List[Dict[str, Any]]]:
         """Get session list, newest-first."""
-        resp = self._get(f"/api/sessions/?limit={limit}&offset={offset}")
-        if resp is None:
-            return None
-        return resp.json()
+        url = f"/api/sessions/?limit={limit}&offset={offset}"
+        if include_frame_counts:
+            url += "&include_frame_counts=true"
+        return self._get(url)
 
     def get_session(self, session_id: int) -> Optional[Dict[str, Any]]:
         """Get a single session detail."""
-        resp = self._get(f"/api/sessions/{session_id}")
-        if resp is None:
-            return None
-        return resp.json()
+        return self._get(f"/api/sessions/{session_id}")
 
     def get_frames(self, session_id: int) -> Optional[List[Dict[str, Any]]]:
         """Get all frames for a session."""
-        resp = self._get(f"/api/sessions/{session_id}/frames")
-        if resp is None:
-            return None
-        return resp.json()
+        return self._get(f"/api/sessions/{session_id}/frames")

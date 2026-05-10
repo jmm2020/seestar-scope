@@ -121,3 +121,32 @@ def test_add_stack_returns_id():
     stacks = db.get_stacks(sid)
     assert len(stacks) == 1
     assert stacks[0].frame_count == 10
+
+
+def test_end_session_updates_conditions_snapshot():
+    db = _db()
+    sid = db.create_session(target_name="M31")
+    db.end_session(sid, conditions_snapshot={"seeing": 3.0, "transparency": "excellent"})
+    record = db.get_by_id(sid)
+    assert record.ended_at is not None
+    assert record.conditions_snapshot["seeing"] == 3.0
+    assert record.conditions_snapshot["transparency"] == "excellent"
+
+
+def test_get_session_summaries_returns_counts():
+    db = _db()
+    sid1 = db.create_session(target_name="M31")
+    sid2 = db.create_session(target_name="M42")
+    db.add_frame(sid1, "f1.fits", 10.0, 80, "L")
+    db.add_frame(sid1, "f2.fits", 20.0, 80, "Ha")
+    db.add_frame(sid2, "f3.fits", 5.0, 80, "L")
+    summaries = db.get_session_summaries([sid1, sid2])
+    assert summaries[sid1]["frame_count"] == 2
+    assert summaries[sid1]["total_exposure_s"] == 30.0
+    assert summaries[sid2]["frame_count"] == 1
+    assert summaries[sid2]["total_exposure_s"] == 5.0
+
+
+def test_get_session_summaries_empty_list():
+    db = _db()
+    assert db.get_session_summaries([]) == {}

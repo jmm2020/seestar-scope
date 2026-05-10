@@ -33,7 +33,8 @@ async def start_session(
     """Start a new observation session.
 
     Creates a session row with started_at = now (UTC) and ended_at = NULL.
-    Returns the full session record (verify-after-dispatch at DB layer).
+    Returns the full session record (verify-after-dispatch: reads back by ID
+    before returning to confirm persistence).
     """
     try:
         session_id = db.create_session(
@@ -56,7 +57,7 @@ async def start_session(
         raise
     except Exception as e:
         logger.error(f"Failed to start session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{session_id}/end", response_model=SessionRecord)
@@ -83,24 +84,32 @@ async def end_session(
         raise
     except Exception as e:
         logger.error(f"Failed to end session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/", response_model=List[SessionRecord])
 async def list_sessions(
     limit: int = Query(50, ge=1, le=500, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
+    include_frame_counts: bool = Query(False, description="Attach frame_count and total_exposure_s to each record"),
     db: SessionDatabase = Depends(get_sessions_db),
 ):
     """List sessions, newest-first."""
     try:
         records = db.list_sessions(limit=limit, offset=offset)
+        if include_frame_counts and records:
+            session_ids = [r.id for r in records]
+            summaries = db.get_session_summaries(session_ids)
+            for r in records:
+                summary = summaries.get(r.id, {})
+                r.frame_count = summary.get("frame_count", 0)
+                r.total_exposure_s = summary.get("total_exposure_s", 0.0)
         logger.info(f"Sessions query returned {len(records)} sessions")
         return records
 
     except Exception as e:
         logger.error(f"Sessions list failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{session_id}", response_model=SessionRecord)
@@ -119,7 +128,7 @@ async def get_session(
         raise
     except Exception as e:
         logger.error(f"Failed to get session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{session_id}/frames", response_model=List[FrameRecord])
@@ -140,7 +149,7 @@ async def get_session_frames(
         raise
     except Exception as e:
         logger.error(f"Failed to get frames for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{session_id}/frames", response_model=FrameRecord)
@@ -149,7 +158,7 @@ async def add_frame(
     request: AddFrameRequest,
     db: SessionDatabase = Depends(get_sessions_db),
 ):
-    """Log a captured frame to an active session."""
+    """Log a captured frame to a session."""
     try:
         existing = db.get_by_id(session_id)
         if existing is None:
@@ -160,7 +169,7 @@ async def add_frame(
             filename=request.filename,
             exposure_s=request.exposure_s,
             gain=request.gain,
-            filter=request.filter,
+            filter_name=request.filter,
             captured_at=request.captured_at,
             alpaca_metadata=request.alpaca_metadata,
         )
@@ -177,4 +186,4 @@ async def add_frame(
         raise
     except Exception as e:
         logger.error(f"Failed to add frame to session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

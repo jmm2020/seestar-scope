@@ -64,6 +64,7 @@ def test_end_session_verify_ended_at_set():
     ):
         result = c.end_session(1)
     assert result is not None
+    assert isinstance(result.get("ended_at"), str) and result["ended_at"] is not None
 
 
 def test_end_session_returns_none_when_ended_at_missing():
@@ -119,3 +120,33 @@ def test_backend_url_env_var(monkeypatch):
     monkeypatch.setenv("BACKEND_URL", "http://docker-host:8503")
     c = SessionsClient()
     assert c.backend_url == "http://docker-host:8503"
+
+
+def test_get_session_returns_dict():
+    c = SessionsClient()
+    payload = {"id": 5, "target_name": "M31", "started_at": "2026-01-01T00:00:00", "ended_at": None}
+    with patch.object(c.session, "get", return_value=_ok(payload)):
+        result = c.get_session(5)
+    assert result == payload
+
+
+def test_get_session_returns_none_on_failure():
+    c = SessionsClient()
+    with patch.object(c.session, "get", side_effect=requests.exceptions.ConnectionError()):
+        assert c.get_session(5) is None
+
+
+def test_post_returns_none_on_non_json_response():
+    c = SessionsClient()
+    bad_resp = _ok({})
+    bad_resp.json.side_effect = ValueError("not json")
+    with patch.object(c.session, "post", return_value=bad_resp):
+        assert c.start_session("M31") is None
+
+
+def test_get_returns_none_on_non_json_response():
+    c = SessionsClient()
+    bad_resp = _ok({})
+    bad_resp.json.side_effect = ValueError("not json")
+    with patch.object(c.session, "get", return_value=bad_resp):
+        assert c.list_sessions() is None

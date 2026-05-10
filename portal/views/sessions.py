@@ -25,13 +25,11 @@ def _session_duration_minutes(session: dict) -> Optional[float]:
     return (ended - started).total_seconds() / 60.0
 
 
-def _render_session_stats(sessions: List[dict], frames_by_session: dict):
+def _render_session_stats(sessions: List[dict]):
     """Summary metrics computed client-side from the list response."""
     total_sessions = len(sessions)
-    total_frames = sum(len(frames_by_session.get(s["id"], [])) for s in sessions)
-    total_exposure_s = sum(
-        f.get("exposure_s", 0.0) for s in sessions for f in frames_by_session.get(s["id"], [])
-    )
+    total_frames = sum(s.get("frame_count") or 0 for s in sessions)
+    total_exposure_s = sum(s.get("total_exposure_s") or 0.0 for s in sessions)
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Sessions", total_sessions)
@@ -39,7 +37,7 @@ def _render_session_stats(sessions: List[dict], frames_by_session: dict):
     c3.metric("Total Exposure", f"{total_exposure_s / 3600.0:.2f} h")
 
 
-def _render_session_list(sessions: List[dict], frames_by_session: dict):
+def _render_session_list(sessions: List[dict]):
     """Table-style timeline of past sessions."""
     if not sessions:
         st.info("No sessions yet — start a stack or run a sequence to record one.")
@@ -56,9 +54,8 @@ def _render_session_list(sessions: List[dict], frames_by_session: dict):
 
     for s in sessions:
         sid = s["id"]
-        frames = frames_by_session.get(sid, [])
-        frame_count = len(frames)
-        total_exp = sum(f.get("exposure_s", 0.0) for f in frames)
+        frame_count = s.get("frame_count") or 0
+        total_exp = s.get("total_exposure_s") or 0.0
         duration_min = _session_duration_minutes(s)
         ended = s.get("ended_at") is not None
         started_dt = _parse_dt(s.get("started_at"))
@@ -76,7 +73,7 @@ def _render_session_list(sessions: List[dict], frames_by_session: dict):
 
 
 def _render_session_detail(session_id: int, client: SessionsClient):
-    """Detail panel for a single session: metadata, frames, re-open action."""
+    """Detail panel for a single session: metadata, frames, and target pre-fill button."""
     session = client.get_session(session_id)
     if session is None:
         st.error(f"Could not load session {session_id} — backend unreachable")
@@ -144,16 +141,11 @@ def render_sessions():
         _render_session_detail(int(selected_id), client)
         return
 
-    sessions = client.list_sessions()
+    sessions = client.list_sessions(include_frame_counts=True)
     if sessions is None:
         st.error("Session history unavailable — backend not running")
         return
 
-    frames_by_session = {}
-    for s in sessions:
-        frames = client.get_frames(s["id"]) or []
-        frames_by_session[s["id"]] = frames
-
-    _render_session_stats(sessions, frames_by_session)
+    _render_session_stats(sessions)
     st.divider()
-    _render_session_list(sessions, frames_by_session)
+    _render_session_list(sessions)
