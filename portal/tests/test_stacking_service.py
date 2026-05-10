@@ -4,6 +4,9 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import numpy as np
+from PIL import Image
+
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -205,3 +208,168 @@ def test_stacking_result_construction():
     assert r.frame_count == 10
     assert r.output_fits is None
     assert r.duration_seconds == 0.0
+
+
+# --- Happy-path run_stacking ------------------------------------------------
+
+
+def test_run_stacking_happy_path(tmp_path, monkeypatch):
+    """Mock Siril subprocess + pre-create output files; verify gallery move and result."""
+    gallery = tmp_path / "gallery"
+    gallery.mkdir()
+    service = StackingService(
+        data_root=str(tmp_path / "seestar"),
+        gallery_dir=str(gallery),
+    )
+    session_id = service.start_session(StackingConfig(target_name="m42"))
+    service.add_frame("/fake/frame.png")
+
+    # Pre-create expected Siril output in session_dir
+    session_dir = service._processed_dir / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    (session_dir / "m42_stacked.fit").write_bytes(b"FITS")
+    (session_dir / "m42_stacked.jpg").write_bytes(b"JPEG")
+
+    fake_fit = session_dir / "light_0001.fit"
+    fake_fit.write_bytes(b"FITS")
+    monkeypatch.setattr(service, "_convert_frames_to_fits", lambda p, d: [fake_fit])
+
+    fake_proc = MagicMock()
+    fake_proc.communicate = AsyncMock(return_value=(b"done", b""))
+    fake_proc.returncode = 0
+    monkeypatch.setattr("asyncio.create_subprocess_exec", AsyncMock(return_value=fake_proc))
+
+    result = asyncio.run(service.run_stacking())
+
+    assert result.success is True
+    assert result.output_fits == str(gallery / f"m42_{session_id}.fit")
+    assert Path(result.output_fits).exists()
+    assert service.is_running is False
+    assert service.progress == 1.0
+
+
+# --- _convert_frames_to_fits unit tests ------------------------------------
+
+
+def test_convert_fits_passthrough(tmp_path):
+    """Existing .fit files are copied as-is without conversion."""
+    service = StackingService(
+        data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery")
+    )
+    src = tmp_path / "frame.fit"
+    src.write_bytes(b"FAKEFIT")
+    session_dir = tmp_path / "session"
+    session_dir.mkdir()
+
+    result = service._convert_frames_to_fits([str(src)], session_dir)
+
+    assert len(result) == 1
+    assert result[0].name == "light_0001.fit"
+    assert result[0].read_bytes() == b"FAKEFIT"
+
+
+def test_convert_png_to_fits(tmp_path):
+    """PNG frames are converted to FITS via PIL/astropy."""
+    service = StackingService(
+        data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery")
+    )
+    img = Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8))
+    src = tmp_path / "frame.png"
+    img.save(str(src))
+    session_dir = tmp_path / "session"
+    session_dir.mkdir()
+
+    result = service._convert_frames_to_fits([str(src)], session_dir)
+
+    assert len(result) == 1
+    assert result[0].suffix == ".fit"
+    assert result[0].exists()
+
+
+def test_convert_skips_bad_frame(tmp_path):
+    """A corrupt frame is skipped; valid frames still convert."""
+    service = StackingService(
+        data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery")
+    )
+    bad = tmp_path / "bad.png"
+    bad.write_bytes(b"not an image")
+
+    img = Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8))
+    good = tmp_path / "good.png"
+    img.save(str(good))
+
+    session_dir = tmp_path / "session"
+    session_dir.mkdir()
+
+    result = service._convert_frames_to_fits([str(bad), str(good)], session_dir)
+
+    assert len(result) == 1
+    assert result[0].name == "light_0002.fit"
+
+
+# --- abort() tests ---------------------------------------------------------
+
+
+def test_abort_when_not_running(tmp_path):
+    """abort() returns False when no stacking is in progress."""
+    service = StackingService(
+        data_root=str(tmp_path / "seestar"),
+        gallery_dir=str(tmp_path / "gallery"),
+    )
+    assert service.abort() is False
+
+
+def test_abort_requested_propagates_to_failure(tmp_path, monkeypatch):
+    """Setting abort before stacking produces a failure result."""
+    service = StackingService(
+        data_root=str(tmp_path / "seestar"),
+        gallery_dir=str(tmp_path / "gallery"),
+    )
+    service.start_session()
+    service.add_frame("/fake/frame.fit")
+
+    fake_fit = tmp_path / "light_0001.fit"
+    fake_fit.write_bytes(b"FITS")
+    monkeypatch.setattr(service, "_convert_frames_to_fits", lambda p, d: [fake_fit])
+
+    original_generate = service._generate_stacking_script
+
+    def abort_then_generate(*args, **kwargs):
+        service._abort_requested = True
+        return original_generate(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_generate_stacking_script", abort_then_generate)
+
+    result = asyncio.run(service.run_stacking())
+
+    assert result.success is False
+    assert "Aborted" in (result.error_message or "")
+    assert service.is_running is False
+
+
+# --- asyncio.TimeoutError path test ----------------------------------------
+
+
+def test_run_stacking_timeout(tmp_path, monkeypatch):
+    """Timeout produces a failure result with is_running reset to False."""
+    service = StackingService(
+        data_root=str(tmp_path / "seestar"),
+        gallery_dir=str(tmp_path / "gallery"),
+    )
+    service.start_session(StackingConfig(target_name="m31"))
+    service.add_frame("/fake/frame.fit")
+
+    fake_fit = tmp_path / "light_0001.fit"
+    fake_fit.write_bytes(b"FITS")
+    monkeypatch.setattr(service, "_convert_frames_to_fits", lambda p, d: [fake_fit])
+
+    async def raise_timeout(*args, **kwargs):
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(service, "_run_siril_async", raise_timeout)
+
+    result = asyncio.run(service.run_stacking())
+
+    assert result.success is False
+    assert "timed out" in (result.error_message or "").lower()
+    assert service.is_running is False

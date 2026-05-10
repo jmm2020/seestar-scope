@@ -84,7 +84,8 @@ def check_backend_health() -> bool:
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
-    except Exception:
+    except Exception as exc:
+        logger.debug("Backend health check failed: %s", exc)
         return False
 
 
@@ -319,8 +320,9 @@ def render_result(result: Dict[str, Any]) -> None:
         try:
             if os.path.exists(output_jpeg):
                 st.image(output_jpeg, caption="Stacked output", use_container_width=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to display stacked image %s: %s", output_jpeg, exc)
+            st.caption(f"Preview unavailable — open `{output_jpeg}` in the Gallery page.")
 
     st.info("View the stacked output in the **Gallery** page.")
 
@@ -384,10 +386,12 @@ def process_stack() -> None:
             st.error(f"Failed to start processing: {response.status_code} — {response.text}")
             return
 
-        # Verify the background task actually started (#13 verify-after-dispatch)
+        # FastAPI BackgroundTasks dispatches asynchronously; poll once to confirm the
+        # background coroutine started before reporting success to the user.
         time.sleep(0.5)
         status = get_stacking_status()
-        if status and status.get("running"):
+        latest = status.get("latest_result") if status else None
+        if status and (status.get("running") or (latest and latest.get("success"))):
             st.success("✅ Siril stacking started")
         else:
             st.warning(

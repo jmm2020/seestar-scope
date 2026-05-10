@@ -100,7 +100,6 @@ def _result_to_response(result: StackingResult) -> StackingResultResponse:
 @router.post("/start", response_model=dict)
 async def start_stacking(
     config: Optional[StackingConfigRequest] = None,
-    background_tasks: BackgroundTasks = None,
     request: Request = None,
 ):
     """Start a new stacking session.
@@ -134,7 +133,7 @@ async def start_stacking(
         "status": "started",
         "session_id": session_id,
         "message": "Stacking session started — use /add-frame and /process",
-        "config": (config.dict() if config else StackingConfig().__dict__),
+        "config": (config.model_dump() if config else StackingConfigRequest().model_dump()),
     }
 
 

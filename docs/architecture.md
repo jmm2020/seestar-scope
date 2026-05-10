@@ -88,7 +88,7 @@ and routed via `portal/backend/routers/stacking.py`.
 | `POST /api/stacking/add-frame` | Append a captured-frame path to the active session |
 | `POST /api/stacking/process` | Dispatch the Siril pipeline as a background task |
 | `POST /api/stacking/abort` | Request abort of an in-progress run |
-| `GET /api/stacking/config` | Default `StackingConfig` |
+| `GET /api/stacking/config` | Default session configuration values |
 
 The pipeline converts the queued PNG/JPG frames to FITS, generates an SSF script
 (adding a `calibrate` block when dark/flat/bias paths are provided), invokes
@@ -103,6 +103,28 @@ For ARM64 hosts where apt-supplied Siril is unavailable, set `SIRIL_BIN` to a
 wrapper that invokes Flatpak Siril, e.g.
 `SIRIL_BIN="flatpak run --command=siril-cli org.siril.Siril"`. `SIRIL_TIMEOUT`
 (default 600 seconds) controls the asyncio timeout for the subprocess call.
+
+## Data Flow — Stacking Session
+
+```
+User (browser)
+  │ configure + click "Start Session"
+  ▼
+portal views/stacking.py
+  │ POST /api/stacking/start  →  session_id returned
+  │ POST /api/stacking/add-frame (× N — one per captured frame)
+  │ POST /api/stacking/process
+  ▼
+FastAPI BackgroundTasks
+  │ asyncio task: stacking_service.run_stacking()
+  │   1. Convert PNG/JPG frames → FITS
+  │   2. Generate SSF script (calibrate block if dark/flat/bias provided)
+  │   3. asyncio.create_subprocess_exec(siril-cli)
+  │   4. Move output → /data/seestar/gallery/
+  ▼
+portal views/stacking.py  ←  polls GET /api/stacking/status (2 s)
+  │ on success: latest_result.output_jpeg shown; gallery page picks up output
+```
 
 ## seestar-enhance Service
 

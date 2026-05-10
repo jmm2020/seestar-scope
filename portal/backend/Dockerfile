@@ -4,8 +4,8 @@ FROM python:3.11-slim
 # siril: provided by the Ubuntu/Debian main repo (works on x86_64 + Ubuntu 22.04 aarch64).
 # The lock042 PPA has a broken ARM64 build as of early 2026 — do NOT use it.
 # If apt install siril fails on the target Jetson, override at runtime:
-#   docker run -e SIRIL_BIN="/usr/local/bin/siril-cli" ...
-# where /usr/local/bin/siril-cli is a host-side wrapper for `flatpak run --command=siril-cli org.siril.Siril`.
+#   docker run -e SIRIL_BIN="flatpak run --command=siril-cli org.siril.Siril" ...
+# shlex.split() in the service handles multi-word commands natively — no wrapper script needed.
 # Flatpak inside Docker requires --privileged and adds 200MB+, so we keep it as the override path only.
 RUN apt-get update && apt-get install -y \
     curl \

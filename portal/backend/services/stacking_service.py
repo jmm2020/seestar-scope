@@ -21,6 +21,7 @@ SirilService for directory layout and FITS validation utilities.
 import asyncio
 import logging
 import os
+import shlex
 import shutil
 import uuid
 from dataclasses import dataclass, field
@@ -211,6 +212,8 @@ class StackingService:
 
             session_dir = self._processed_dir / session_id
             session_dir.mkdir(parents=True, exist_ok=True)
+            lights_dir = self._processed_dir / "lights"
+            lights_dir.mkdir(parents=True, exist_ok=True)
 
             # Phase 1: PNG/JPG → FITS conversion -----------------------------
             self._progress = 0.1
@@ -357,14 +360,14 @@ class StackingService:
                     )
                     warned_8bit = True
 
-                # Astropy expects float/int; preserve native bit depth
+                # Preserve source bit depth (uint8 for Seestar PNGs, uint16 for raw FITS pass-through)
                 hdu = fits.PrimaryHDU(data=arr)
                 dest = session_dir / f"light_{idx:04d}.fit"
                 hdu.writeto(dest, overwrite=True)
                 out.append(dest)
 
             except Exception as exc:
-                logger.warning("Skipping frame %s: %s", src, exc)
+                logger.warning("Skipping frame %s: %s", src, exc, exc_info=True)
 
         return out
 
@@ -450,7 +453,6 @@ class StackingService:
         Raises asyncio.TimeoutError if Siril runs past SIRIL_TIMEOUT.
         """
         # SIRIL_BIN may include flags ("flatpak run ..."), so split via shlex
-        import shlex
         cmd = shlex.split(self._siril_bin) + [
             "-d", str(working_dir),
             "-s", str(script_path),
@@ -472,6 +474,7 @@ class StackingService:
         except asyncio.TimeoutError:
             try:
                 proc.kill()
+                await proc.wait()
             except ProcessLookupError:
                 pass
             raise
