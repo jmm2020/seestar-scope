@@ -343,7 +343,6 @@ def _render_quick_targets(alpaca):
     """Quick-access buttons for popular deep sky objects."""
     st.subheader("Quick Targets")
     st.caption("Popular deep sky objects from the Messier catalog. Click to slew directly.")
-    # 4 columns x 3 rows = 12 targets
     for row_start in range(0, len(QUICK_TARGETS), 4):
         cols = st.columns(4)
         for i, col in enumerate(cols):

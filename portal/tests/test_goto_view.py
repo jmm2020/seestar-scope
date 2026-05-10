@@ -52,7 +52,7 @@ def test_poll_returns_true_when_predicate_satisfied_immediately():
 
 def test_poll_returns_true_after_n_polls():
     alpaca = _make_alpaca([{"at_park": False}, {"at_park": False}, {"at_park": True}])
-    times = iter([0, 1, 2, 3, 4])
+    times = iter([0, 1, 2, 3])
     with patch("views.goto.time.time", side_effect=times), \
          patch("views.goto.time.sleep"):
         result = _poll_state_transition(alpaca, lambda s: s.get("at_park"), timeout_s=10)
@@ -70,7 +70,7 @@ def test_poll_returns_false_on_timeout():
 
 def test_poll_swallows_exceptions_and_retries():
     alpaca = _make_alpaca([Exception("network error"), {"at_park": True}])
-    times = iter([0, 1, 2, 3])
+    times = iter([0, 1, 2])
     with patch("views.goto.time.time", side_effect=times), \
          patch("views.goto.time.sleep"):
         result = _poll_state_transition(alpaca, lambda s: s.get("at_park"), timeout_s=10)
@@ -89,7 +89,7 @@ def test_poll_returns_false_when_all_calls_raise():
 def test_poll_fail_closed_on_absent_keys():
     # When status keys are absent, predicates must not give false positives
     alpaca = _make_alpaca([{}, {"at_park": True}])
-    times = iter([0, 1, 2, 3])
+    times = iter([0, 1, 2])
     with patch("views.goto.time.time", side_effect=times), \
          patch("views.goto.time.sleep"):
         result = _poll_state_transition(
