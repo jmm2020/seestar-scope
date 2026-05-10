@@ -25,6 +25,7 @@ class MessageType(str, Enum):
     HEARTBEAT = "heartbeat"
     ERROR = "error"
     CONNECTED = "connected"
+    STACK_PROGRESS = "stack_progress"
 
 
 class ConnectionManager:
@@ -210,6 +211,52 @@ async def heartbeat_sender() -> None:
             logger.error(f"Heartbeat error: {e}")
 
 
+async def stack_progress_broadcaster(request: Request) -> None:
+    """Background task: poll Seestar view state and broadcast stack progress."""
+    alpaca = request.app.state.alpaca
+    last_frame_count: int = -1
+    last_is_stacking: bool = False
+
+    while True:
+        try:
+            view_data = alpaca.get_view_state()
+            if view_data:
+                view = view_data.get("View", view_data)
+                stage = view.get("stage", "")
+                is_stacking = stage == "Stack"
+                stack_data = view.get("Stack", {})
+                frame_count = int(stack_data.get("count", 0))
+                lapse_ms = view.get("lapse_ms", 0)
+
+                state = {
+                    "frame_count": frame_count,
+                    "elapsed_s": round(lapse_ms / 1000, 1) if lapse_ms else 0,
+                    "snr_estimate": round(frame_count ** 0.5, 2) if frame_count > 0 else 0.0,
+                    "is_stacking": is_stacking,
+                    "stage": stage,
+                    "mode": view.get("mode", "unknown"),
+                    "target": view.get("target_name", ""),
+                }
+
+                # Persist for reconnect recovery
+                request.app.state.live_stack_state = state
+
+                # Only broadcast on change to avoid noise
+                if frame_count != last_frame_count or is_stacking != last_is_stacking:
+                    await manager.broadcast({
+                        "type": MessageType.STACK_PROGRESS,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "data": state,
+                    })
+                    last_frame_count = frame_count
+                    last_is_stacking = is_stacking
+
+        except Exception as e:
+            logger.error(f"Stack progress broadcast error: {e}")
+
+        await asyncio.sleep(3.0)
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, request: Request):
     """
@@ -302,6 +349,15 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
     # Accept connection
     await manager.connect(websocket)
 
+    # Send current stack state for reconnect recovery
+    live_stack = getattr(request.app.state, "live_stack_state", None)
+    if live_stack:
+        await manager.send_personal_message({
+            "type": MessageType.STACK_PROGRESS,
+            "timestamp": datetime.utcnow().isoformat(),
+            "data": live_stack,
+        }, websocket)
+
     # Start background tasks if not already running
     if not hasattr(request.app.state, "_ws_tasks_started"):
         request.app.state._ws_tasks_started = True
@@ -310,6 +366,7 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
         asyncio.create_task(telescope_status_broadcaster(request))
         asyncio.create_task(processing_status_broadcaster(request))
         asyncio.create_task(heartbeat_sender())
+        asyncio.create_task(stack_progress_broadcaster(request))
 
         logger.info("WebSocket background tasks started")
 
@@ -375,4 +432,18 @@ async def get_active_connections():
     return {
         "active_connections": len(manager.active_connections),
         "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/live-stack")
+async def get_live_stack_state(request: Request):
+    """Current live stack state for reconnect/refresh recovery.
+
+    Returns the last known state from the stack_progress_broadcaster.
+    Clients should fetch this on page load before the WebSocket connects.
+    """
+    state = getattr(request.app.state, "live_stack_state", {})
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "state": state,
     }
