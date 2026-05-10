@@ -1,4 +1,5 @@
 """Camera control, live view stream, and stacking controls page."""
+
 import streamlit as st
 import time
 
@@ -21,8 +22,15 @@ MODE_LABELS = {
     "planet": "Planetary",
 }
 
+try:
+    from backend.config import settings as _backend_settings
+    BACKEND_PORT = _backend_settings.port  # sourced from config.py / .env
+except Exception:
+    BACKEND_PORT = 8503
+
 
 # --- Live View ---
+
 
 def _render_live_view(alpaca):
     """Embed the MJPEG stream from seestar_alp."""
@@ -44,6 +52,7 @@ def _render_live_view(alpaca):
 
 # --- Session Status ---
 
+
 def _render_session_status(alpaca):
     """Show live stacking/view state with optional auto-poll."""
     st.subheader("Session Status")
@@ -52,9 +61,12 @@ def _render_session_status(alpaca):
     with col_btn:
         st.button("Update Status", key="btn_update_status", use_container_width=True)
     with col_auto:
-        auto_poll = st.checkbox("Auto-poll (5s)", key="auto_poll_status",
-                                help="Automatically refresh status every 5 seconds. "
-                                     "Does NOT interrupt the live stream.")
+        auto_poll = st.checkbox(
+            "Auto-poll (5s)",
+            key="auto_poll_status",
+            help="Automatically refresh status every 5 seconds. "
+            "Does NOT interrupt the live stream.",
+        )
 
     view_data = alpaca.get_view_state()
     if not view_data:
@@ -115,7 +127,126 @@ def _render_session_status(alpaca):
     return view, is_stacking
 
 
+# --- Live Stack Panel ---
+
+
+def _render_live_stack_panel():
+    """Live stack progress panel — metrics update via WebSocket without page reruns.
+
+    Embeds an inline JS WebSocket listener that updates DOM elements directly.
+    """
+    st.subheader("Live Stack Progress")
+
+    st.html(f"""
+    <div id="lsp-container" style="background:#0d1117;border:1px solid #30363d;
+                                   border-radius:8px;padding:20px;margin:4px 0;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
+                    text-align:center;font-family:monospace;">
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">Frames</div>
+                <div id="lsp-frames"
+                     style="color:#3fb950;font-size:2em;font-weight:700;">0</div>
+            </div>
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">SNR Gain</div>
+                <div id="lsp-snr"
+                     style="color:#58a6ff;font-size:2em;font-weight:700;">1.0x</div>
+            </div>
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">Elapsed</div>
+                <div id="lsp-elapsed"
+                     style="color:#d29922;font-size:2em;font-weight:700;">0m 0s</div>
+            </div>
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">Target</div>
+                <div id="lsp-target"
+                     style="color:#bc8cff;font-size:1.3em;font-weight:700;">—</div>
+            </div>
+        </div>
+        <div id="lsp-status"
+             style="color:#484f58;font-size:0.7em;text-align:right;margin-top:12px;">
+            Connecting to status stream…
+        </div>
+    </div>
+
+    <script>
+    (function() {{
+        var PORT = {BACKEND_PORT};
+        var wsUrl = 'ws://' + window.location.hostname + ':' + PORT + '/api/status/ws';
+        var restUrl = 'http://' + window.location.hostname + ':' + PORT + '/api/status/live-stack';
+        var ws = null;
+        var retryDelay = 1000;
+
+        function fmtElapsed(s) {{
+            return Math.floor(s / 60) + 'm ' + Math.floor(s % 60) + 's';
+        }}
+
+        function updateUI(data) {{
+            var framesEl = document.getElementById('lsp-frames');
+            if (!framesEl) return;  // DOM not ready / Streamlit rerender
+            var fc = data.frame_count || 0;
+            framesEl.textContent = fc;
+            document.getElementById('lsp-snr').textContent =
+                data.snr_estimate ? data.snr_estimate.toFixed(1) + 'x' : '1.0x';
+            document.getElementById('lsp-elapsed').textContent =
+                data.elapsed_s ? fmtElapsed(data.elapsed_s) : '0m 0s';
+            document.getElementById('lsp-target').textContent = data.target || '—';
+            var el = document.getElementById('lsp-status');
+            el.textContent = '● Live  ' + new Date().toLocaleTimeString();
+            el.style.color = '#3fb950';
+        }}
+
+        function setStatus(msg, color) {{
+            var el = document.getElementById('lsp-status');
+            if (el) {{ el.textContent = msg; el.style.color = color || '#484f58'; }}
+        }}
+
+        function connect() {{
+            ws = new WebSocket(wsUrl);
+            ws.onopen = function() {{
+                setStatus('Connected', '#58a6ff');
+                retryDelay = 1000;
+            }};
+            ws.onmessage = function(e) {{
+                try {{
+                    var msg = JSON.parse(e.data);
+                    if (msg.type === 'stack_progress' && msg.data) {{
+                        updateUI(msg.data);
+                    }}
+                }} catch(err) {{
+                    console.error('[lsp] onmessage error:', err);
+                }}
+            }};
+            var hadError = false;
+            ws.onerror = function() {{
+                hadError = true;
+            }};
+            ws.onclose = function() {{
+                setStatus(hadError ? 'Stream error — reconnecting…' : 'Reconnecting…', '#d29922');
+                hadError = false;
+                setTimeout(connect, Math.min(retryDelay, 30000));
+                retryDelay = Math.min(retryDelay * 2, 30000);
+            }};
+        }}
+
+        // Fetch last known state immediately for reconnect recovery
+        fetch(restUrl)
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{ if (d.state && d.state.frame_count) updateUI(d.state); }})
+            .catch(function(err) {{ console.warn('[lsp] pre-fetch failed:', err); }});
+
+        connect();
+    }})();
+    </script>
+    """)
+
+
 # --- Stacking Controls ---
+
 
 def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = True):
     """Gain, exposure, LP filter, and start/stop/restart buttons; disabled when alp_available is False."""
@@ -125,36 +256,51 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
 
     col_gain, col_exp, col_lp = st.columns(3)
     with col_gain:
-        gain = st.slider("Stack Gain", 0, 400, value=int(current_gain),
-                          step=1, key="stack_gain")
+        gain = st.slider("Stack Gain", 0, 400, value=int(current_gain), step=1, key="stack_gain")
     with col_exp:
-        st.number_input("Exposure (ms)", min_value=1000, max_value=30000,
-                        value=10000, step=1000, key="stack_exp")
+        st.number_input(
+            "Exposure (ms)",
+            min_value=1000,
+            max_value=30000,
+            value=10000,
+            step=1000,
+            key="stack_exp",
+        )
     with col_lp:
         lp_on = view.get("lp_filter", False) if view else False
         lp_filter = st.checkbox("LP Filter", value=lp_on, key="stack_lp")
 
     col_start, col_stop, col_restart = st.columns(3)
     with col_start:
-        if st.button("Start Stack", type="primary",
-                     disabled=is_stacking or not alp_available,
-                     use_container_width=True, key="btn_start_stack"):
+        if st.button(
+            "Start Stack",
+            type="primary",
+            disabled=is_stacking or not alp_available,
+            use_container_width=True,
+            key="btn_start_stack",
+        ):
             with st.spinner("Starting stack..."):
                 alpaca.start_stack(restart=False, gain=gain)
                 if lp_filter != lp_on:
                     alpaca.set_stack_lp_filter(lp_filter)
             st.rerun()
     with col_stop:
-        if st.button("Stop Stack",
-                     disabled=not is_stacking or not alp_available,
-                     use_container_width=True, key="btn_stop_stack"):
+        if st.button(
+            "Stop Stack",
+            disabled=not is_stacking or not alp_available,
+            use_container_width=True,
+            key="btn_stop_stack",
+        ):
             with st.spinner("Stopping..."):
                 alpaca.stop_stack()
             st.rerun()
     with col_restart:
-        if st.button("Restart Stack", disabled=not alp_available,
-                     use_container_width=True,
-                     key="btn_restart_stack"):
+        if st.button(
+            "Restart Stack",
+            disabled=not alp_available,
+            use_container_width=True,
+            key="btn_restart_stack",
+        ):
             with st.spinner("Restarting stack..."):
                 alpaca.stop_stack()
                 time.sleep(1)
@@ -165,13 +311,52 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
 
     # Apply gain change if user adjusted slider while stacking
     if is_stacking:
-        if st.button("Apply Gain", key="btn_apply_stack_gain",
-                     help="Send current slider value to the Seestar without restarting"):
+        if st.button(
+            "Apply Gain",
+            key="btn_apply_stack_gain",
+            help="Send current slider value to the Seestar without restarting",
+        ):
             alpaca.set_stack_gain(gain)
             st.success(f"Gain set to {gain}")
 
+    # Reject & Restart — discard contaminated sub-stack and start fresh
+    if is_stacking and alp_available:
+        st.divider()
+        col_rej, col_rej_help = st.columns([1, 3])
+        with col_rej:
+            if st.button(
+                "Reject & Restart",
+                type="secondary",
+                use_container_width=True,
+                key="btn_reject_frame",
+                help="Discard current sub-stack and restart fresh from zero.",
+            ):
+                with st.spinner("Restarting stack…"):
+                    try:
+                        stop_resp = alpaca.stop_stack()
+                        time.sleep(1)
+                        start_resp = alpaca.start_stack(restart=True, gain=gain)
+                    except Exception as exc:
+                        st.error(f"Reject & Restart failed: {exc}")
+                        st.rerun()
+                        st.stop()
+                if stop_resp.success and start_resp.success:
+                    st.success("Stack restarted — accumulating fresh frames from this point.")
+                else:
+                    st.error(
+                        f"Reject failed: stop={'OK' if stop_resp.success else stop_resp.error_message}"
+                        f", start={'OK' if start_resp.success else start_resp.error_message}"
+                    )
+                st.rerun()
+        with col_rej_help:
+            st.caption(
+                "Use when clouds or an aircraft contaminate the current sub-stack. "
+                "This discards accumulated data and starts counting from frame 1 again."
+            )
+
 
 # --- Stack Settings (Expander) ---
+
 
 def _render_stack_settings(alpaca):
     """Expandable panel for stack processing options and dither."""
@@ -185,40 +370,57 @@ def _render_stack_settings(alpaca):
         st.caption("Processing Options")
         c1, c2, c3 = st.columns(3)
         with c1:
-            dbe = st.checkbox("DBE (Background Extraction)",
-                              value=stack_cfg.get("dbe", True), key="opt_dbe")
-            star_corr = st.checkbox("Star Correction",
-                                    value=stack_cfg.get("star_correction", True),
-                                    key="opt_star_corr")
+            dbe = st.checkbox(
+                "DBE (Background Extraction)", value=stack_cfg.get("dbe", True), key="opt_dbe"
+            )
+            star_corr = st.checkbox(
+                "Star Correction", value=stack_cfg.get("star_correction", True), key="opt_star_corr"
+            )
         with c2:
-            airplane = st.checkbox("Airplane Removal",
-                                   value=stack_cfg.get("airplane_line_removal", False),
-                                   key="opt_airplane")
-            drizzle = st.checkbox("Drizzle 2x",
-                                  value=stack_cfg.get("drizzle2x", False),
-                                  key="opt_drizzle")
+            airplane = st.checkbox(
+                "Airplane Removal",
+                value=stack_cfg.get("airplane_line_removal", False),
+                key="opt_airplane",
+            )
+            drizzle = st.checkbox(
+                "Drizzle 2x", value=stack_cfg.get("drizzle2x", False), key="opt_drizzle"
+            )
         with c3:
-            save_ok = st.checkbox("Save OK Frames",
-                                  value=stack_cfg.get("save_discrete_ok_frame", True),
-                                  key="opt_save_ok")
-            save_all = st.checkbox("Save All Frames",
-                                   value=stack_cfg.get("save_discrete_frame", False),
-                                   key="opt_save_all")
+            save_ok = st.checkbox(
+                "Save OK Frames",
+                value=stack_cfg.get("save_discrete_ok_frame", True),
+                key="opt_save_ok",
+            )
+            save_all = st.checkbox(
+                "Save All Frames",
+                value=stack_cfg.get("save_discrete_frame", False),
+                key="opt_save_all",
+            )
 
         st.caption("Dither Settings")
         cd1, cd2, cd3 = st.columns(3)
         with cd1:
-            dither_en = st.checkbox("Enable Dither",
-                                    value=dither_cfg.get("enable", True),
-                                    key="opt_dither_en")
+            dither_en = st.checkbox(
+                "Enable Dither", value=dither_cfg.get("enable", True), key="opt_dither_en"
+            )
         with cd2:
-            dither_pix = st.number_input("Dither Pixels", min_value=10, max_value=500,
-                                         value=dither_cfg.get("pix", 100), step=10,
-                                         key="opt_dither_pix")
+            dither_pix = st.number_input(
+                "Dither Pixels",
+                min_value=10,
+                max_value=500,
+                value=dither_cfg.get("pix", 100),
+                step=10,
+                key="opt_dither_pix",
+            )
         with cd3:
-            dither_int = st.number_input("Dither Interval", min_value=1, max_value=50,
-                                         value=dither_cfg.get("interval", 5), step=1,
-                                         key="opt_dither_int")
+            dither_int = st.number_input(
+                "Dither Interval",
+                min_value=1,
+                max_value=50,
+                value=dither_cfg.get("interval", 5),
+                step=1,
+                key="opt_dither_int",
+            )
 
         if st.button("Apply Settings", use_container_width=True, key="btn_apply_settings"):
             with st.spinner("Applying..."):
@@ -254,23 +456,32 @@ def _render_camera_status(alpaca):
 
         col_state, col_gain, col_filter = st.columns(3)
         with col_state:
-            st.metric("Camera State", state_text,
-                      help="Idle = ready, Exposing = capturing light, "
-                           "Reading = transferring from sensor, Error = problem detected")
+            st.metric(
+                "Camera State",
+                state_text,
+                help="Idle = ready, Exposing = capturing light, "
+                "Reading = transferring from sensor, Error = problem detected",
+            )
         with col_gain:
-            st.metric("Current Gain", gain if gain is not None else "N/A",
-                      help="Sony IMX462 sensor gain (0-400). Higher = brighter "
-                           "but noisier.")
+            st.metric(
+                "Current Gain",
+                gain if gain is not None else "N/A",
+                help="Sony IMX462 sensor gain (0-400). Higher = brighter but noisier.",
+            )
         with col_filter:
             try:
                 names = alpaca.get_filter_names()
                 pos = alpaca.get_filter_position()
-                current = names[pos] if names and pos is not None and pos < len(names) else "Unknown"
+                current = (
+                    names[pos] if names and pos is not None and pos < len(names) else "Unknown"
+                )
             except Exception:
                 current = "N/A"
-            st.metric("Filter", current,
-                      help="Active filter: Dark = no filter, "
-                           "IR = infrared cut, LP = light pollution")
+            st.metric(
+                "Filter",
+                current,
+                help="Active filter: Dark = no filter, IR = infrared cut, LP = light pollution",
+            )
 
         return state_code
     except Exception as e:
@@ -279,6 +490,7 @@ def _render_camera_status(alpaca):
 
 
 # --- Single Frame Capture (existing) ---
+
 
 def _render_exposure_controls(alpaca):
     """Exposure time, gain, and filter controls."""
@@ -310,15 +522,17 @@ def _render_exposure_controls(alpaca):
     with col_exp:
         exposure = st.number_input(
             "Exposure (seconds)",
-            min_value=0.001, max_value=2000.0,
+            min_value=0.001,
+            max_value=2000.0,
             value=st.session_state.get("img_exposure", 10.0),
-            step=1.0, format="%.3f", key="exposure_input",
+            step=1.0,
+            format="%.3f",
+            key="exposure_input",
         )
         st.session_state["img_exposure"] = exposure
 
     with col_gain:
-        gain = st.slider("Gain", min_value=0, max_value=400, step=1,
-                          key="gain_slider")
+        gain = st.slider("Gain", min_value=0, max_value=400, step=1, key="gain_slider")
         if st.button("Set Gain", key="apply_gain", use_container_width=True):
             resp = alpaca.set_gain(gain)
             if resp.success:
@@ -350,8 +564,7 @@ def _render_capture_controls(alpaca, exposure):
     col_cap, col_abort, col_loop = st.columns([2, 1, 2])
 
     with col_cap:
-        if st.button("Capture", type="primary", use_container_width=True,
-                      key="btn_capture"):
+        if st.button("Capture", type="primary", use_container_width=True, key="btn_capture"):
             resp = alpaca.start_exposure(exposure, light=True)
             if resp.success:
                 st.session_state["exposing"] = True
@@ -374,9 +587,12 @@ def _render_capture_controls(alpaca, exposure):
         loop_enabled = st.checkbox("Loop Mode", key="loop_mode")
         if loop_enabled:
             frame_count = st.number_input(
-                "Frames", min_value=1, max_value=999,
+                "Frames",
+                min_value=1,
+                max_value=999,
                 value=st.session_state.get("loop_frames", 10),
-                step=1, key="frame_count_input",
+                step=1,
+                key="frame_count_input",
             )
             st.session_state["loop_frames"] = frame_count
             completed = st.session_state.get("loop_completed", 0)
@@ -449,8 +665,7 @@ def _render_preview_and_save(alpaca, config):
 
     st.subheader("Preview")
 
-    use_stretch = st.checkbox("Apply histogram stretch", value=True,
-                              key="stretch_toggle")
+    use_stretch = st.checkbox("Apply histogram stretch", value=True, key="stretch_toggle")
     display_image = apply_stretch(image) if use_stretch else image
     st.image(display_image, caption="Captured Image", use_container_width=True)
 
@@ -464,8 +679,7 @@ def _render_preview_and_save(alpaca, config):
     with col_save:
         st.write("")
         st.write("")
-        if st.button("Save Image", type="primary", key="btn_save",
-                      use_container_width=True):
+        if st.button("Save Image", type="primary", key="btn_save", use_container_width=True):
             save_dir = getattr(config, "save_directory", "./captures")
             filepath = save_image(image, target_name, save_dir=save_dir)
             st.success(f"Saved: {filepath}")
@@ -478,8 +692,7 @@ def _render_preview_and_save(alpaca, config):
 
         save_dir = getattr(config, "save_directory", "./captures")
         target_name = st.session_state.get("slewing_target", "loop")
-        filepath = save_image(image, f"{target_name}_frame{completed}",
-                              save_dir=save_dir)
+        filepath = save_image(image, f"{target_name}_frame{completed}", save_dir=save_dir)
         st.caption(f"Auto-saved frame {completed}: {filepath}")
 
         if completed < total:
@@ -493,14 +706,14 @@ def _render_preview_and_save(alpaca, config):
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error(f"Loop capture failed on frame {completed + 1}: "
-                         f"{resp.error_message}")
+                st.error(f"Loop capture failed on frame {completed + 1}: {resp.error_message}")
         else:
             st.success(f"Loop complete: {completed} frames captured")
             st.session_state["loop_completed"] = 0
 
 
 # --- Main Page ---
+
 
 def render_imaging(alpaca, config):
     """Render the camera imaging page."""
@@ -520,6 +733,9 @@ def render_imaging(alpaca, config):
 
     # Session status with auto-poll
     view, is_stacking = _render_session_status(alpaca)
+
+    if is_stacking:
+        _render_live_stack_panel()
 
     st.divider()
 

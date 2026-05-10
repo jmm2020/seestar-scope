@@ -10,7 +10,7 @@ from typing import Dict, Set
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -20,11 +20,13 @@ router = APIRouter(prefix="/api/status", tags=["status"])
 
 class MessageType(str, Enum):
     """WebSocket message types"""
+
     TELESCOPE_STATUS = "telescope_status"
     PROCESSING_STATUS = "processing_status"
     HEARTBEAT = "heartbeat"
     ERROR = "error"
     CONNECTED = "connected"
+    STACK_PROGRESS = "stack_progress"
 
 
 class ConnectionManager:
@@ -45,11 +47,14 @@ class ConnectionManager:
         logger.info(f"WebSocket client connected. Total clients: {len(self.active_connections)}")
 
         # Send welcome message
-        await self.send_personal_message({
-            "type": MessageType.CONNECTED,
-            "timestamp": datetime.utcnow().isoformat(),
-            "message": "Connected to Seestar status stream"
-        }, websocket)
+        await self.send_personal_message(
+            {
+                "type": MessageType.CONNECTED,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "message": "Connected to Seestar status stream",
+            },
+            websocket,
+        )
 
     async def disconnect(self, websocket: WebSocket) -> None:
         """Remove a WebSocket connection"""
@@ -116,7 +121,7 @@ async def telescope_status_broadcaster(request: Request) -> None:
             # Build status message
             message = {
                 "type": MessageType.TELESCOPE_STATUS,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": {
                     "telescope": {
                         "connected": telescope_status.get("connected", False),
@@ -126,20 +131,20 @@ async def telescope_status_broadcaster(request: Request) -> None:
                         "dec": telescope_status.get("dec"),
                         "altitude": telescope_status.get("altitude"),
                         "azimuth": telescope_status.get("azimuth"),
-                        "at_park": telescope_status.get("at_park", False)
+                        "at_park": telescope_status.get("at_park", False),
                     },
                     "camera": {
                         "state": camera_status.get("state", "unknown"),
                         "temperature": camera_status.get("temperature"),
                         "cooler_on": camera_status.get("cooler_on", False),
-                        "gain": camera_status.get("gain")
+                        "gain": camera_status.get("gain"),
                     },
                     "focuser": {
                         "position": focuser_status.get("position"),
                         "is_moving": focuser_status.get("is_moving", False),
-                        "temperature": focuser_status.get("temperature")
-                    }
-                }
+                        "temperature": focuser_status.get("temperature"),
+                    },
+                },
             }
 
             # Broadcast to all clients
@@ -148,11 +153,13 @@ async def telescope_status_broadcaster(request: Request) -> None:
         except Exception as e:
             logger.error(f"Telescope status broadcast error: {e}")
             # Broadcast error to clients
-            await manager.broadcast({
-                "type": MessageType.ERROR,
-                "timestamp": datetime.utcnow().isoformat(),
-                "error": str(e)
-            })
+            await manager.broadcast(
+                {
+                    "type": MessageType.ERROR,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "error": str(e),
+                }
+            )
 
         # Poll every 2 seconds
         await asyncio.sleep(2.0)
@@ -175,15 +182,15 @@ async def processing_status_broadcaster(request: Request) -> None:
                 if last_states.get(session_id) != current_state:
                     message = {
                         "type": MessageType.PROCESSING_STATUS,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "data": {
                             "session_id": session_id,
                             "status": current_state,
                             "output_fits": str(result.output_path) if result.output_path else None,
                             "output_jpeg": str(result.jpeg_path) if result.jpeg_path else None,
                             "error_message": result.error_message,
-                            "stats": result.stats
-                        }
+                            "stats": result.stats,
+                        },
                     }
 
                     await manager.broadcast(message)
@@ -202,12 +209,70 @@ async def heartbeat_sender() -> None:
         await asyncio.sleep(30.0)  # Heartbeat every 30 seconds
 
         try:
-            await manager.broadcast({
-                "type": MessageType.HEARTBEAT,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            await manager.broadcast(
+                {"type": MessageType.HEARTBEAT, "timestamp": datetime.now(timezone.utc).isoformat()}
+            )
         except Exception as e:
             logger.error(f"Heartbeat error: {e}")
+
+
+async def stack_progress_broadcaster(request: Request) -> None:
+    """Background task: poll Seestar view state and broadcast stack progress."""
+    alpaca = request.app.state.alpaca
+    last_frame_count: int = -1
+    last_is_stacking: bool = False
+
+    while True:
+        try:
+            view_data = alpaca.get_view_state()
+            if view_data:
+                view = view_data.get("View", view_data)
+                stage = view.get("stage", "")
+                is_stacking = stage == "Stack"
+                stack_data = view.get("Stack", {})
+                try:
+                    frame_count = int(float(stack_data.get("count", 0) or 0))
+                except (ValueError, TypeError):
+                    frame_count = last_frame_count if last_frame_count >= 0 else 0
+                lapse_ms = view.get("lapse_ms", 0)
+
+                state = {
+                    "frame_count": frame_count,
+                    "elapsed_s": round(lapse_ms / 1000, 1) if lapse_ms else 0,
+                    "snr_estimate": round(frame_count**0.5, 2) if frame_count > 0 else 0.0,
+                    "is_stacking": is_stacking,
+                    "stage": stage,
+                    "mode": view.get("mode", "unknown"),
+                    "target": view.get("target_name", ""),
+                    "captured_at": datetime.now(timezone.utc).isoformat(),
+                }
+
+                # Persist for reconnect recovery
+                request.app.state.live_stack_state = state
+
+                # Only broadcast on change to avoid noise
+                if frame_count != last_frame_count or is_stacking != last_is_stacking:
+                    await manager.broadcast(
+                        {
+                            "type": MessageType.STACK_PROGRESS,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "data": state,
+                        }
+                    )
+                    last_frame_count = frame_count
+                    last_is_stacking = is_stacking
+
+        except Exception as e:
+            logger.error(f"Stack progress broadcast error: {e}")
+            await manager.broadcast(
+                {
+                    "type": MessageType.ERROR,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "error": f"Stack progress unavailable: {e}",
+                }
+            )
+
+        await asyncio.sleep(3.0)
 
 
 @router.websocket("/ws")
@@ -215,18 +280,19 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
     """
     WebSocket endpoint for real-time status updates.
 
-    **Connection URL:** ws://192.168.0.148:8503/api/status/ws
+    **Connection URL:** ws://<host>:8503/api/status/ws
 
     **Message Types:**
     - `telescope_status`: Real-time telescope position, tracking, slewing state (every 2s)
     - `processing_status`: Processing job status updates (pushed on state change)
+    - `stack_progress`: Live stack frame count, elapsed time, SNR estimate (every 3s, on change only)
     - `heartbeat`: Connection health check (every 30s)
     - `error`: Error notifications
     - `connected`: Welcome message on connection
 
     **Client Example (JavaScript):**
     ```javascript
-    const ws = new WebSocket('ws://192.168.0.148:8503/api/status/ws');
+    const ws = new WebSocket('ws://<host>:8503/api/status/ws');
 
     ws.onopen = () => {
         console.log('Connected to Seestar status stream');
@@ -243,6 +309,10 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
             case 'processing_status':
                 console.log('Processing:', msg.data.status);
                 updateProcessingUI(msg.data);
+                break;
+            case 'stack_progress':
+                console.log('Stack:', msg.data.frame_count, 'frames');
+                updateStackUI(msg.data);
                 break;
             case 'heartbeat':
                 console.log('Heartbeat:', msg.timestamp);
@@ -282,7 +352,7 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
         print("Connected to Seestar status stream")
 
     ws = websocket.WebSocketApp(
-        "ws://192.168.0.148:8503/api/status/ws",
+        "ws://<host>:8503/api/status/ws",
         on_open=on_open,
         on_message=on_message,
         on_error=on_error,
@@ -302,6 +372,18 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
     # Accept connection
     await manager.connect(websocket)
 
+    # Send current stack state for reconnect recovery
+    live_stack = getattr(request.app.state, "live_stack_state", None)
+    if live_stack:
+        await manager.send_personal_message(
+            {
+                "type": MessageType.STACK_PROGRESS,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": live_stack,
+            },
+            websocket,
+        )
+
     # Start background tasks if not already running
     if not hasattr(request.app.state, "_ws_tasks_started"):
         request.app.state._ws_tasks_started = True
@@ -310,6 +392,7 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
         asyncio.create_task(telescope_status_broadcaster(request))
         asyncio.create_task(processing_status_broadcaster(request))
         asyncio.create_task(heartbeat_sender())
+        asyncio.create_task(stack_progress_broadcaster(request))
 
         logger.info("WebSocket background tasks started")
 
@@ -326,29 +409,30 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
 
                 # Handle client commands
                 if message.get("command") == "ping":
-                    await manager.send_personal_message({
-                        "type": "pong",
-                        "timestamp": datetime.utcnow().isoformat()
-                    }, websocket)
+                    await manager.send_personal_message(
+                        {"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()},
+                        websocket,
+                    )
 
                 elif message.get("command") == "subscribe":
-                    # Future enhancement: selective subscription
-                    await manager.send_personal_message({
-                        "type": "subscribed",
-                        "channels": message.get("channels", ["all"])
-                    }, websocket)
+                    await manager.send_personal_message(
+                        {"type": "subscribed", "channels": message.get("channels", ["all"])},
+                        websocket,
+                    )
 
                 else:
-                    await manager.send_personal_message({
-                        "type": MessageType.ERROR,
-                        "error": f"Unknown command: {message.get('command')}"
-                    }, websocket)
+                    await manager.send_personal_message(
+                        {
+                            "type": MessageType.ERROR,
+                            "error": f"Unknown command: {message.get('command')}",
+                        },
+                        websocket,
+                    )
 
             except json.JSONDecodeError:
-                await manager.send_personal_message({
-                    "type": MessageType.ERROR,
-                    "error": "Invalid JSON"
-                }, websocket)
+                await manager.send_personal_message(
+                    {"type": MessageType.ERROR, "error": "Invalid JSON"}, websocket
+                )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected normally")
@@ -374,5 +458,19 @@ async def get_active_connections():
     """
     return {
         "active_connections": len(manager.active_connections),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/live-stack")
+async def get_live_stack_state(request: Request):
+    """Current live stack state for reconnect/refresh recovery.
+
+    Returns the last known state from the stack_progress_broadcaster.
+    Clients should fetch this on page load before the WebSocket connects.
+    """
+    state = getattr(request.app.state, "live_stack_state", {})
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "state": state,
     }
