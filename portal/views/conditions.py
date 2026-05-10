@@ -21,7 +21,8 @@ def _check_backend_reachable() -> bool:
     try:
         resp = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return resp.status_code == 200
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Backend health check failed: {e}")
         return False
 
 

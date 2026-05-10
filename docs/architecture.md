@@ -41,12 +41,13 @@ The ALP backend talks to the S50 directly via TCP.
 | File / Dir | Purpose |
 |------------|---------|
 | `app.py` | Streamlit entry point — page routing |
-| `config.toml` | Runtime config (S50 IP, ports, imaging defaults) |
+| `config.toml` | Runtime config (S50 IP, ports, imaging defaults, site coordinates) |
 | `config_loader.py` | TOML config loader with env-var overrides |
 | `requirements.txt` | Python dependencies |
 | `Dockerfile` | Container build (used by `seestar-portal-ui` service) |
 | `clients/alpaca_client.py` | ASCOM ALPACA REST client (telescope, camera, focuser, filter, switch) |
 | `clients/stellarium_client.py` | Stellarium Remote Control client |
+| `views/conditions.py` | Observing conditions page — weather + sun/moon/twilight dashboard |
 | `views/dashboard.py` | Live status — 2 s auto-refresh |
 | `views/goto.py` | GoTo/Slew — manual coords, Stellarium, Messier/NGC catalog |
 | `views/imaging.py` | Camera control — exposure, gain, filter, loop mode |
@@ -54,10 +55,24 @@ The ALP backend talks to the S50 directly via TCP.
 | `views/sequence.py` | Multi-target automated imaging sequences |
 | `views/settings.py` | App settings UI |
 | `views/theme.py` | Cosmic CSS theme |
+| `backend/routers/conditions.py` | REST endpoints: `/api/conditions/current`, `/api/conditions/forecast` |
+| `backend/services/conditions_service.py` | ConditionsService — astropy astro data + Open-Meteo weather; degrades gracefully offline |
 | `catalog/messier.py` | Messier catalog (110 objects) |
 | `catalog/ngc_ic.py` | NGC/IC catalog subset |
 | `utils/` | Coordinates, image processing, session logger |
 | `tests/` | Unit + integration tests |
+
+## Environment Variables
+
+All env vars override their `config.toml` counterparts.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SEESTAR_IP` | `192.168.0.132` | Seestar S50 IP address |
+| `SITE_LAT` | `37.12` | Observing site latitude (°N positive) |
+| `SITE_LON` | `-123.45` | Observing site longitude (°E positive) |
+| `SITE_ELEVATION_M` | `0.0` | Site elevation in metres |
+| `SITE_NAME` | `My Observatory` | Display name for the site |
 
 ## ALP Backend (`vendor/seestar_alp` submodule)
 

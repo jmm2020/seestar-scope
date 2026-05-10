@@ -1,11 +1,8 @@
 """SeestarScope Backend - Unified FastAPI Service
 
-Provides REST API endpoints for:
-1. Telescope control (slew, track, park, etc.)
-2. Image gallery browsing
-3. Siril processing jobs
-
-Runs as separate service on port 8503 alongside Streamlit UI (8502).
+REST API for telescope control, image gallery, image processing,
+autofocus, plate solving, and observing conditions.
+Runs on port 8503 alongside the Streamlit UI (8502).
 """
 
 from fastapi import FastAPI
@@ -60,6 +57,12 @@ async def lifespan(app: FastAPI):
     alpaca.disconnect_all()
     close_database()
 
+    # Teardown conditions service HTTP client
+    from backend.routers import conditions as _conditions_mod
+
+    if _conditions_mod._conditions_service is not None:
+        _conditions_mod._conditions_service.close()
+
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -85,7 +88,7 @@ app.include_router(processing.router, prefix="/api/processing", tags=["processin
 app.include_router(autofocus.router)  # prefix="/api/autofocus" defined in router
 app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in router
 app.include_router(conditions.router)  # prefix="/api/conditions" defined in router
-app.include_router(status_ws.router)  # WebSocket live status (Phase 3)
+app.include_router(status_ws.router)  # WebSocket: live telescope status stream
 
 
 @app.get("/")

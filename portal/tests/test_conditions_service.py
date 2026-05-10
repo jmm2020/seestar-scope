@@ -172,3 +172,16 @@ def test_get_forecast_degrades_on_failure(service):
     assert all(p.weather.weather_api_ok is False for p in forecast)
     # Astro still populated
     assert all(isinstance(p.astro, AstroData) for p in forecast)
+
+
+def test_get_forecast_pads_short_api_response(service):
+    """API returns 4 hours but 12 requested — trailing entries degraded."""
+    with patch.object(service._http, "get", return_value=_mock_hourly_response(hours=4)):
+        forecast = service.get_forecast(hours=12)
+    assert len(forecast) == 12
+    # First 4 should have real weather data
+    assert all(p.weather.weather_api_ok for p in forecast[:4])
+    # Remaining 8 should be degraded
+    assert all(not p.weather.weather_api_ok for p in forecast[4:])
+    # Astro still populated for all
+    assert all(isinstance(p.astro, AstroData) for p in forecast)

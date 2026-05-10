@@ -6,7 +6,9 @@ REST endpoints for current and forecast observing conditions:
 - Weather: cloud cover, wind, humidity, temp (degrades when Open-Meteo unreachable)
 """
 
-from fastapi import APIRouter, HTTPException, Request, Query
+import asyncio
+
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List
 import logging
@@ -22,7 +24,7 @@ router = APIRouter(prefix="/api/conditions", tags=["conditions"])
 _conditions_service: Optional[ConditionsService] = None
 
 
-def get_conditions_service(request: Request) -> ConditionsService:
+def get_conditions_service() -> ConditionsService:
     """Get conditions service instance, building it from settings on first use."""
     global _conditions_service
     if _conditions_service is None:
@@ -99,11 +101,12 @@ def _to_response(data) -> ConditionsResponse:
 
 
 @router.get("/current", response_model=ConditionsResponse)
-async def get_current_conditions(request: Request):
+async def get_current_conditions():
     """Return current observing conditions (astro + weather)."""
     try:
-        service = get_conditions_service(request)
-        return _to_response(service.get_current())
+        service = get_conditions_service()
+        data = await asyncio.to_thread(service.get_current)
+        return _to_response(data)
     except Exception as e:
         logger.error(f"Failed to get current conditions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -111,13 +114,13 @@ async def get_current_conditions(request: Request):
 
 @router.get("/forecast", response_model=List[ConditionsResponse])
 async def get_forecast(
-    request: Request,
     hours: int = Query(12, ge=1, le=48, description="Forecast horizon in hours (1-48)"),
 ):
     """Return per-hour conditions for the next N hours (default 12)."""
     try:
-        service = get_conditions_service(request)
-        return [_to_response(d) for d in service.get_forecast(hours=hours)]
+        service = get_conditions_service()
+        forecast = await asyncio.to_thread(service.get_forecast, hours)
+        return [_to_response(d) for d in forecast]
     except Exception as e:
         logger.error(f"Failed to get forecast: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -92,8 +92,8 @@ class ConditionsService:
         """Close the underlying HTTP client."""
         try:
             self._http.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"HTTP client close failed (non-critical): {e}")
 
     def get_current(self) -> ConditionsData:
         """Compute astro + fetch weather for the current moment."""
@@ -188,12 +188,19 @@ class ConditionsService:
                 temperature_c=_as_float(current.get("temperature_2m")),
                 weather_api_ok=True,
             )
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+            logger.warning(f"Open-Meteo current weather unreachable: {e}")
+            return WeatherData(weather_api_ok=False)
         except Exception as e:
-            logger.warning(f"Open-Meteo current weather fetch failed: {e}")
+            logger.warning(f"Open-Meteo current weather parse/unexpected error: {e}", exc_info=True)
             return WeatherData(weather_api_ok=False)
 
     def _fetch_hourly_weather(self, hours: int) -> List[WeatherData]:
-        """Fetch hourly forecast. Returns empty list on failure."""
+        """Fetch hourly forecast from Open-Meteo.
+
+        Always returns a list of exactly `hours` WeatherData entries.
+        On API failure, entries have weather_api_ok=False and None field values.
+        """
         params = {
             "latitude": self.site.latitude,
             "longitude": self.site.longitude,
@@ -212,6 +219,11 @@ class ConditionsService:
             humidity = hourly.get("relative_humidity_2m") or []
             temp = hourly.get("temperature_2m") or []
             n = min(len(cloud), len(wind), len(humidity), len(temp), hours)
+            if n < hours:
+                logger.warning(
+                    f"Open-Meteo returned {n}/{hours} forecast points "
+                    f"(cloud={len(cloud)}, wind={len(wind)}, humidity={len(humidity)}, temp={len(temp)})"
+                )
             out: List[WeatherData] = []
             for i in range(n):
                 out.append(
@@ -227,8 +239,11 @@ class ConditionsService:
             while len(out) < hours:
                 out.append(WeatherData(weather_api_ok=False))
             return out
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+            logger.warning(f"Open-Meteo hourly forecast unreachable: {e}")
+            return [WeatherData(weather_api_ok=False) for _ in range(hours)]
         except Exception as e:
-            logger.warning(f"Open-Meteo hourly forecast fetch failed: {e}")
+            logger.warning(f"Open-Meteo hourly forecast parse/unexpected error: {e}", exc_info=True)
             return [WeatherData(weather_api_ok=False) for _ in range(hours)]
 
 
