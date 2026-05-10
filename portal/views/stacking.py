@@ -49,7 +49,6 @@ def render_stacking(alpaca, config):
 
     is_running = bool(status.get("running", False))
     latest_result = status.get("latest_result")
-    session_id = status.get("session_id")
 
     if is_running:
         st.info("\U0001f504 **Stacking pipeline is running...** Please wait.")

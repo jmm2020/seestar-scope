@@ -10,7 +10,7 @@ run_stacking() pipeline is dispatched via FastAPI BackgroundTasks.
 
 import dataclasses
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
