@@ -9,3 +9,9 @@ astropy>=6.0.0
 Pillow>=10.0.0
 numpy>=1.24.0
 scipy>=1.11.0
+# Image enhancement pipeline (issue #17)
+scikit-image>=0.22.0
+opencv-python-headless>=4.9.0
+sep>=1.2.1
+photutils>=1.10.0
+lacosmic>=1.1.0

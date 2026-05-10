@@ -26,7 +26,10 @@ def render_gallery():
         st.error(f"⚠️ Backend API is not reachable at {BACKEND_URL}. Start the FastAPI backend first.")
         st.code("cd backend && uvicorn main:app --host 0.0.0.0 --port 8503", language="bash")
         return
-    
+
+    if not check_postprocessing_health():
+        st.warning("⚠️ Post-processing service is unreachable — Process buttons disabled.")
+
     # Display gallery stats
     render_gallery_stats()
     
@@ -51,6 +54,17 @@ def check_backend_health() -> bool:
     """Check if FastAPI backend is reachable."""
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+def check_postprocessing_health() -> bool:
+    """Check if the postprocessing endpoint is reachable and healthy."""
+    try:
+        response = requests.get(
+            f"{BACKEND_URL}/api/postprocessing/health", timeout=2
+        )
         return response.status_code == 200
     except Exception:
         return False
@@ -188,36 +202,74 @@ def render_image_grid(images: List[Dict[str, Any]]):
 def render_image_card(image: Dict[str, Any]):
     """Render a single image card with thumbnail and metadata."""
     with st.container():
-        # Image thumbnail
-        thumbnail_url = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
-        
+        # Image thumbnail (or processed preview when toggled on)
+        if image.get('processed') and image.get('processed_path'):
+            show_processed = st.checkbox(
+                "Show Processed",
+                value=True,
+                key=f"show_proc_{image['id']}",
+            )
+            if show_processed:
+                thumbnail_url = (
+                    f"{BACKEND_URL}/api/gallery/{image['id']}"
+                    "/thumbnail?size=256&processed=true"
+                )
+            else:
+                thumbnail_url = (
+                    f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
+                )
+        else:
+            thumbnail_url = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
+
         try:
             st.image(thumbnail_url, use_container_width=True)
         except Exception:
             st.error("Failed to load thumbnail")
-        
+
         # Metadata
         metadata = image['metadata']
-        
+
         st.markdown(f"**{metadata['target']}**")
         st.caption(f"🕐 {format_timestamp(image['captured_at'])}")
-        
+
         # Technical details in compact format
         st.caption(f"⏱️ {metadata['exposure']}s @ Gain {metadata['gain']}")
-        
+
         # Processing status badges
         badge_cols = st.columns(2)
         with badge_cols[0]:
             if image.get('processed'):
                 st.success("✓ Processed", help="Image has been processed")
-        
+
         with badge_cols[1]:
             if image.get('stacked'):
                 st.info("📚 Stacked", help="Part of stacked sequence")
-        
+
+        # Process button (kicks off backend pipeline)
+        if check_postprocessing_health():
+            if st.button("Process", key=f"process_{image['id']}"):
+                try:
+                    resp = requests.post(
+                        f"{BACKEND_URL}/api/postprocessing/apply",
+                        json={
+                            "image_path": image.get("png_path") or image.get("fits_path"),
+                            "stretch": "stf",
+                            "color_balance": True,
+                        },
+                        timeout=5,
+                    )
+                    if resp.ok:
+                        st.success(f"Processing started: job {resp.json().get('job_id')}")
+                    else:
+                        st.error(f"Processing failed: {resp.text}")
+                except Exception as exc:
+                    st.error(f"Processing request failed: {exc}")
+        else:
+            st.caption("(post-processing offline)")
+
         # Session ID
         st.caption(f"Session: `{image['session_id']}`")
-        
+
         # Expander for full details
         with st.expander("Details"):
             render_image_details(image)
