@@ -134,7 +134,6 @@ def _render_live_stack_panel():
     """Live stack progress panel — metrics update via WebSocket without page reruns.
 
     Embeds an inline JS WebSocket listener that updates DOM elements directly.
-    Backend port 8503 is the FastAPI WebSocket server.
     """
     st.subheader("Live Stack Progress")
 

@@ -415,7 +415,6 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
                     )
 
                 elif message.get("command") == "subscribe":
-                    # Future enhancement: selective subscription
                     await manager.send_personal_message(
                         {"type": "subscribed", "channels": message.get("channels", ["all"])},
                         websocket,

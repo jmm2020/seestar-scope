@@ -4,10 +4,19 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.routers.status_ws import MessageType, stack_progress_broadcaster
+from backend.routers.status_ws import MessageType, router, stack_progress_broadcaster
+
+
+def _make_endpoint_client(state_cls):
+    app = FastAPI()
+    app.include_router(router)
+    app.state = state_cls()
+    return TestClient(app)
 
 
 def _make_view_data(count=5, lapse_ms=60000, stage="Stack", mode="star", target="M42"):
@@ -193,20 +202,10 @@ async def test_broadcaster_handles_non_numeric_count():
 
 def test_live_stack_endpoint_empty_state():
     """Returns empty state dict when no broadcaster has run yet."""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from backend.routers.status_ws import router
-
-    app = FastAPI()
-    app.include_router(router)
-
     class FakeState:
         pass
 
-    app.state = FakeState()
-
-    client = TestClient(app)
+    client = _make_endpoint_client(FakeState)
     resp = client.get("/api/status/live-stack")
     assert resp.status_code == 200
     body = resp.json()
@@ -216,22 +215,12 @@ def test_live_stack_endpoint_empty_state():
 
 def test_live_stack_endpoint_returns_current_state():
     """Returns the last known state dict written by the broadcaster."""
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from backend.routers.status_ws import router
-
     expected = {"frame_count": 42, "is_stacking": True, "snr_estimate": 6.48}
-
-    app = FastAPI()
-    app.include_router(router)
 
     class FakeState:
         live_stack_state = expected
 
-    app.state = FakeState()
-
-    client = TestClient(app)
+    client = _make_endpoint_client(FakeState)
     resp = client.get("/api/status/live-stack")
     assert resp.status_code == 200
     assert resp.json()["state"] == expected
