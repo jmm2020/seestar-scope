@@ -155,6 +155,11 @@ elif page == "Gallery":
 
     render_gallery()
 
+elif page == "Sessions":
+    from views.sessions import render_sessions
+
+    render_sessions()
+
 elif page == "Settings":
     from views.settings import render_settings
 

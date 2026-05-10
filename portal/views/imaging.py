@@ -1,9 +1,13 @@
 """Camera control, live view stream, and stacking controls page."""
 
+import logging
 import streamlit as st
 import time
 
+from clients.sessions_client import SessionsClient
 from utils.image_processing import alpaca_imagearray_to_image, save_image, apply_stretch
+
+logger = logging.getLogger(__name__)
 
 # Stage labels (shared with dashboard)
 STAGE_LABELS = {
@@ -283,6 +287,19 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
                 alpaca.start_stack(restart=False, gain=gain)
                 if lp_filter != lp_on:
                     alpaca.set_stack_lp_filter(lp_filter)
+            # Auto-create session when stacking starts
+            if st.session_state.get("active_session_id") is None:
+                _sc = SessionsClient()
+                target = st.session_state.get("slewing_target", "Unknown")
+                session = _sc.start_session(target_name=target)
+                if session:
+                    st.session_state["active_session_id"] = session["id"]
+                    logger.info(f"Session {session['id']} started for {target}")
+                else:
+                    st.warning(
+                        "Session history unavailable — backend not reachable; imaging continues without logging"
+                    )
+                    logger.warning(f"Could not start session for {target}: backend unreachable")
             st.rerun()
     with col_stop:
         if st.button(
@@ -293,6 +310,19 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
         ):
             with st.spinner("Stopping..."):
                 alpaca.stop_stack()
+            # End active session on stop
+            sid = st.session_state.get("active_session_id")
+            if sid is not None:
+                _sc = SessionsClient()
+                result = _sc.end_session(sid)
+                if result is None:
+                    st.warning(
+                        f"Session {sid} could not be closed in history — backend unreachable"
+                    )
+                    logger.warning(f"Session {sid} end_session failed; session may appear open in history")
+                else:
+                    logger.info(f"Session {sid} ended")
+                st.session_state["active_session_id"] = None
             st.rerun()
     with col_restart:
         if st.button(
@@ -683,6 +713,17 @@ def _render_preview_and_save(alpaca, config):
             save_dir = getattr(config, "save_directory", "./captures")
             filepath = save_image(image, target_name, save_dir=save_dir)
             st.success(f"Saved: {filepath}")
+            # Log frame to active session
+            sid = st.session_state.get("active_session_id")
+            if sid is not None:
+                _sc = SessionsClient()
+                _sc.add_frame(
+                    session_id=sid,
+                    filename=str(filepath),
+                    exposure_s=st.session_state.get("img_exposure", 10.0),
+                    gain=st.session_state.get("gain_slider", 80),
+                    filter_name="Unknown",
+                )
 
     # Handle loop mode
     if st.session_state.get("loop_mode"):
@@ -725,6 +766,9 @@ def render_imaging(alpaca, config):
             f"⚠️ **seestar_alp is not reachable** at `{alpaca.alp_base_url}` — "
             "live view and stacking are non-functional until the service is running."
         )
+
+    if "active_session_id" not in st.session_state:
+        st.session_state["active_session_id"] = None
 
     # Live MJPEG stream
     _render_live_view(alpaca)

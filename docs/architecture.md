@@ -47,6 +47,7 @@ The ALP backend talks to the S50 directly via TCP.
 | `Dockerfile` | Container build (used by `seestar-portal-ui` service) |
 | `clients/alpaca_client.py` | ASCOM ALPACA REST client (telescope, camera, focuser, filter, switch) |
 | `clients/stellarium_client.py` | Stellarium Remote Control client |
+| `clients/sessions_client.py` | HTTP client for sessions API — used by Streamlit views |
 | `views/conditions.py` | Observing conditions page — weather + sun/moon/twilight dashboard |
 | `views/dashboard.py` | Live status — 2 s auto-refresh |
 | `views/goto.py` | GoTo/Slew — manual coords, Stellarium, Messier/NGC catalog |
@@ -54,8 +55,12 @@ The ALP backend talks to the S50 directly via TCP.
 | `views/stacking.py` | Siril stacking session management UI (start/add-frame/process/abort) |
 | `views/focus.py` | Focuser position control |
 | `views/sequence.py` | Multi-target automated imaging sequences |
+| `views/sessions.py` | Observation history view — session list, detail, re-open |
 | `views/settings.py` | App settings UI |
 | `views/theme.py` | Cosmic CSS theme |
+| `backend/database.py` | Dual-singleton DB manager — `GalleryDatabase` + `SessionDatabase` (same file, separate connections) |
+| `backend/models/sessions.py` | Session data model — `SessionDatabase` (SQLite), Pydantic schemas |
+| `backend/routers/sessions.py` | Sessions REST API — 6 endpoints under `/api/sessions` |
 | `backend/routers/conditions.py` | REST endpoints: `/api/conditions/current`, `/api/conditions/forecast` |
 | `backend/services/conditions_service.py` | ConditionsService — astropy astro data + Open-Meteo weather; degrades gracefully offline |
 | `catalog/messier.py` | Messier catalog (110 objects) |
@@ -166,9 +171,10 @@ See `deploy/jetson/README.md` for the full first-boot procedure.
 
 ```
 User (browser)
-  │ click "Start Exposure"
+  │ click "Start Stack"
   ▼
 portal views/imaging.py
+  │ POST /api/sessions/ (auto-create session)       ← NEW
   │ POST /api/v1/camera/0/startexposure
   ▼
 ALP backend (ALPACA)
@@ -184,6 +190,7 @@ portal utils/image_processing.py
   │ normalize → PIL Image → apply_stretch()
   ▼
 portal (display + save to captures/)
+  │ POST /api/sessions/{id}/end (on Stop Stack)     ← NEW
 
 [Optional post-stack]
 portal sequence runner

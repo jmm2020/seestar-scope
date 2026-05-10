@@ -68,7 +68,7 @@ When comparing `tests/baselines/workstation.json` vs `tests/baselines/jetson.jso
 
 **Unexpected differences** that should block cutover:
 - Any service returning `{"error": ...}` on Jetson that returns healthy on workstation
-- Missing endpoints (gallery, health, telescope status)
+- Missing endpoints (gallery, health, telescope status, sessions)
 - WebSocket connection failures on Jetson when passing on workstation
 
 ## Execution Log

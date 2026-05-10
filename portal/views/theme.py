@@ -16,6 +16,7 @@ NAV_ITEMS = {
     "Plate Solve": "Plate Solve",
     "Sequence": "Sequence",
     "Gallery": "Gallery",
+    "Sessions": "Sessions",
     "Settings": "Settings",
 }
 
@@ -32,6 +33,7 @@ NAV_ICONS = {
     "Plate Solve": "\U0001f5fa\ufe0f", # world map
     "Sequence": "\U0001f3ac",      # clapper
     "Gallery": "\U0001f5bc\ufe0f", # framed picture
+    "Sessions": "\U0001f4cb",      # clipboard
     "Settings": "\u2699\ufe0f",    # gear
 }
 
