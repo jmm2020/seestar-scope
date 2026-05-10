@@ -7,10 +7,7 @@ from unittest.mock import MagicMock
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 for _mod in ("backend.app.services.siril_service", "backend.services.platesolve_service"):
-    _stub = MagicMock()
-    _stub.SirilService.return_value = MagicMock()
-    _stub.ASTAPService.return_value = MagicMock()
-    sys.modules.setdefault(_mod, _stub)
+    sys.modules.setdefault(_mod, MagicMock())
 
 from backend.main import app  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
