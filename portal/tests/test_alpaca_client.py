@@ -1,4 +1,5 @@
 """Tests for AlpacaClient - no live hardware required."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -10,6 +11,7 @@ from clients.alpaca_client import AlpacaClient, AlpacaResponse
 
 
 # --- AlpacaResponse tests ---
+
 
 def test_alpaca_response_success():
     resp = AlpacaResponse(value=True, error_number=0)
@@ -34,6 +36,7 @@ def test_alpaca_response_default_values():
 
 
 # --- AlpacaClient construction ---
+
 
 def test_client_default_construction():
     client = AlpacaClient()
@@ -61,6 +64,7 @@ def test_transaction_id_increments():
 
 
 # --- Mocked HTTP tests ---
+
 
 def _mock_get_response(value, error_number=0, error_message=""):
     """Create a mock requests.Response for GET."""
@@ -136,7 +140,10 @@ def test_connect_all_partial_failure():
 def test_get_network_error():
     client = AlpacaClient()
     import requests
-    with patch.object(client.session, "get", side_effect=requests.exceptions.ConnectionError("refused")):
+
+    with patch.object(
+        client.session, "get", side_effect=requests.exceptions.ConnectionError("refused")
+    ):
         result = client._get("telescope", 0, "rightascension")
         assert result.success is False
         assert "refused" in result.error_message
@@ -200,8 +207,12 @@ def test_is_alp_available_true_on_http_error_response():
 def test_is_alp_available_logs_on_failure():
     """Probe failure is logged at DEBUG level with URL context."""
     client = AlpacaClient()
-    with patch.object(client.session, "get", side_effect=requests.exceptions.ConnectionError("refused")), \
-         patch("clients.alpaca_client.logger") as mock_logger:
+    with (
+        patch.object(
+            client.session, "get", side_effect=requests.exceptions.ConnectionError("refused")
+        ),
+        patch("clients.alpaca_client.logger") as mock_logger,
+    ):
         result = client.is_alp_available()
     assert result is False
     mock_logger.debug.assert_called_once()
@@ -211,7 +222,8 @@ def test_is_alp_available_logs_on_failure():
 def test_is_alp_available_timeout():
     client = AlpacaClient()
     with patch.object(
-        client.session, "get",
+        client.session,
+        "get",
         side_effect=requests.exceptions.Timeout("timed out"),
     ):
         assert client.is_alp_available() is False

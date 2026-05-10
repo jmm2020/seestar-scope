@@ -1,11 +1,8 @@
 """SeestarScope Backend - Unified FastAPI Service
 
-Provides REST API endpoints for:
-1. Telescope control (slew, track, park, etc.)
-2. Image gallery browsing
-3. Siril processing jobs
-
-Runs as separate service on port 8503 alongside Streamlit UI (8502).
+REST API for telescope control, image gallery, image processing,
+autofocus, plate solving, and observing conditions.
+Runs on port 8503 alongside the Streamlit UI (8502).
 """
 
 from fastapi import FastAPI
@@ -21,6 +18,7 @@ from backend.routers import (
     autofocus,
     platesolve,
     sessions,
+    conditions,
     stacking,
 )
 from backend.config import settings
@@ -72,6 +70,10 @@ async def lifespan(app: FastAPI):
     close_sessions_database()
 
 
+    if conditions._conditions_service is not None:
+        conditions._conditions_service.close()
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="SeestarScope Backend API",
@@ -96,8 +98,10 @@ app.include_router(processing.router, prefix="/api/processing", tags=["processin
 app.include_router(autofocus.router)  # prefix="/api/autofocus" defined in router
 app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in router
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
+app.include_router(conditions.router)  # prefix="/api/conditions" defined in router
 app.include_router(stacking.router)    # prefix="/api/stacking" defined in router
-app.include_router(status_ws.router)  # WebSocket live status (Phase 3)
+app.include_router(status_ws.router)  # WebSocket: live telescope status stream
+
 
 
 @app.get("/")
@@ -113,6 +117,7 @@ async def root():
             "autofocus": "/api/autofocus/*",
             "platesolve": "/api/platesolve/*",
             "sessions": "/api/sessions/*",
+            "conditions": "/api/conditions/*",
             "stacking": "/api/stacking/*",
             "status_ws": "ws://192.168.0.148:8503/api/status/ws",
             "status_connections": "/api/status/connections",

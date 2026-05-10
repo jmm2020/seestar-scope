@@ -1,4 +1,5 @@
 """Stellarium Remote Control API Client."""
+
 import requests
 from dataclasses import dataclass
 from typing import Optional
@@ -10,17 +11,18 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StellariumObject:
     """A celestial object selected in Stellarium."""
+
     name: str
     object_type: str
-    ra_j2000_hours: float    # RA in hours (converted from Stellarium degrees)
-    dec_j2000_degrees: float # Dec in degrees
-    altitude: float          # Current altitude above horizon
-    azimuth: float           # Current azimuth
-    magnitude: float         # Visual magnitude
-    above_horizon: bool      # Whether currently visible
-    constellation: str       # IAU constellation abbreviation
-    rise: str                # Rise time string
-    set_time: str            # Set time string
+    ra_j2000_hours: float  # RA in hours (converted from Stellarium degrees)
+    dec_j2000_degrees: float  # Dec in degrees
+    altitude: float  # Current altitude above horizon
+    azimuth: float  # Current azimuth
+    magnitude: float  # Visual magnitude
+    above_horizon: bool  # Whether currently visible
+    constellation: str  # IAU constellation abbreviation
+    rise: str  # Rise time string
+    set_time: str  # Set time string
 
 
 class StellariumClient:
@@ -34,8 +36,7 @@ class StellariumClient:
     def is_available(self) -> bool:
         """Check if Stellarium Remote Control is responding."""
         try:
-            resp = self.session.get(f"{self.base_url}/api/main/status",
-                                    timeout=self.timeout)
+            resp = self.session.get(f"{self.base_url}/api/main/status", timeout=self.timeout)
             return resp.status_code == 200
         except requests.exceptions.RequestException:
             return False
@@ -43,8 +44,7 @@ class StellariumClient:
     def get_status(self) -> Optional[dict]:
         """Get Stellarium status (location, time, FOV)."""
         try:
-            resp = self.session.get(f"{self.base_url}/api/main/status",
-                                    timeout=self.timeout)
+            resp = self.session.get(f"{self.base_url}/api/main/status", timeout=self.timeout)
             return resp.json() if resp.status_code == 200 else None
         except requests.exceptions.RequestException:
             return None

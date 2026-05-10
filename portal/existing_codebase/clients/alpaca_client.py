@@ -13,6 +13,7 @@ ErrorNumber > 0 indicates failure. Common errors:
   - 1031: "Property not implemented"
   - 1036: "Invalid value"
 """
+
 import requests
 from dataclasses import dataclass
 from typing import Any, Optional, Dict, List
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AlpacaResponse:
     """Standard ALPACA API response."""
+
     value: Any = None
     error_number: int = 0
     error_message: str = ""
@@ -39,8 +41,9 @@ class AlpacaClient:
 
     DEVICES = ["telescope", "camera", "focuser", "filterwheel", "switch"]
 
-    def __init__(self, host: str = "192.168.0.132", port: int = 32323,
-                 client_id: int = 1, timeout: int = 30):
+    def __init__(
+        self, host: str = "192.168.0.132", port: int = 32323, client_id: int = 1, timeout: int = 30
+    ):
         self.base_url = f"http://{host}:{port}/api/v1"
         self.client_id = client_id
         self.timeout = timeout
@@ -126,13 +129,16 @@ class AlpacaClient:
 
     def slew_to(self, ra_hours: float, dec_degrees: float) -> AlpacaResponse:
         """Slew telescope to RA/Dec (async). RA in hours, Dec in degrees."""
-        return self._put("telescope", 0, "slewtocoordinatesasync",
-                         RightAscension=str(ra_hours),
-                         Declination=str(dec_degrees))
+        return self._put(
+            "telescope",
+            0,
+            "slewtocoordinatesasync",
+            RightAscension=str(ra_hours),
+            Declination=str(dec_degrees),
+        )
 
     def set_tracking(self, enabled: bool) -> AlpacaResponse:
-        return self._put("telescope", 0, "tracking",
-                         Tracking=str(enabled).lower())
+        return self._put("telescope", 0, "tracking", Tracking=str(enabled).lower())
 
     def park(self) -> AlpacaResponse:
         return self._put("telescope", 0, "park")
@@ -145,8 +151,9 @@ class AlpacaClient:
 
     def pulse_guide(self, direction: int, duration_ms: int) -> AlpacaResponse:
         """Pulse guide. Direction: 0=N, 1=S, 2=E, 3=W."""
-        return self._put("telescope", 0, "pulseguide",
-                         Direction=str(direction), Duration=str(duration_ms))
+        return self._put(
+            "telescope", 0, "pulseguide", Direction=str(direction), Duration=str(duration_ms)
+        )
 
     # --- Camera ---
 
@@ -161,9 +168,9 @@ class AlpacaClient:
 
     def start_exposure(self, duration_seconds: float, light: bool = True) -> AlpacaResponse:
         """Start camera exposure. Duration in seconds, Light=True for light frames."""
-        return self._put("camera", 0, "startexposure",
-                         Duration=str(duration_seconds),
-                         Light=str(light).lower())
+        return self._put(
+            "camera", 0, "startexposure", Duration=str(duration_seconds), Light=str(light).lower()
+        )
 
     def abort_exposure(self) -> AlpacaResponse:
         return self._put("camera", 0, "abortexposure")
@@ -210,5 +217,4 @@ class AlpacaClient:
         return bool(self._get("switch", 0, "getswitchvalue", Id=0).value)
 
     def set_dew_heater(self, on: bool) -> AlpacaResponse:
-        return self._put("switch", 0, "setswitchvalue",
-                         Id="0", Value="1" if on else "0")
+        return self._put("switch", 0, "setswitchvalue", Id="0", Value="1" if on else "0")

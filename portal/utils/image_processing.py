@@ -25,15 +25,15 @@ def alpaca_imagearray_to_image(image_data: list, color: bool = True) -> Optional
     # Handle 2D mono
     if arr.ndim == 2:
         arr = ((arr - arr.min()) / max(arr.max() - arr.min(), 1) * 255).astype(np.uint8)
-        return Image.fromarray(arr, mode='L')
+        return Image.fromarray(arr, mode="L")
     # Handle 3D color
     elif arr.ndim == 3:
         arr = ((arr - arr.min()) / max(arr.max() - arr.min(), 1) * 255).astype(np.uint8)
         if arr.shape[2] == 3:
-            return Image.fromarray(arr, mode='RGB')
+            return Image.fromarray(arr, mode="RGB")
         elif arr.shape[0] == 3:
             arr = np.transpose(arr, (1, 2, 0))
-            return Image.fromarray(arr, mode='RGB')
+            return Image.fromarray(arr, mode="RGB")
     return None
 
 
@@ -49,7 +49,9 @@ def save_image(image: Image.Image, target_name: str, save_dir: str = "captures")
     return str(filepath)
 
 
-def apply_stretch(image: Image.Image, black_point: float = 0.1, white_point: float = 99.9) -> Image.Image:
+def apply_stretch(
+    image: Image.Image, black_point: float = 0.1, white_point: float = 99.9
+) -> Image.Image:
     """Apply histogram stretch for better visibility of faint objects."""
     arr = np.array(image, dtype=np.float32)
     low = np.percentile(arr, black_point)

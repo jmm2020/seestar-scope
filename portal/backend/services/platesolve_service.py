@@ -21,6 +21,7 @@ import math
 
 class SolveStatus(Enum):
     """Plate solving job status"""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -30,6 +31,7 @@ class SolveStatus(Enum):
 
 class SolveMode(Enum):
     """Solving mode: blind or hint-based"""
+
     BLIND = "blind"
     HINT = "hint"
 
@@ -37,6 +39,7 @@ class SolveMode(Enum):
 @dataclass
 class WCSSolution:
     """World Coordinate System solution from plate solve"""
+
     ra_hours: float  # Right Ascension in decimal hours
     dec_degrees: float  # Declination in decimal degrees
     rotation_deg: float  # Field rotation in degrees
@@ -50,6 +53,7 @@ class WCSSolution:
 @dataclass
 class PlatesolvingResult:
     """Complete plate solving result with offset calculation"""
+
     session_id: str
     status: SolveStatus
     mode: SolveMode
@@ -72,7 +76,7 @@ class PlatesolvingResult:
 class ASTAPService:
     """
     ASTAP plate solving service with V-curve search algorithm.
-    
+
     ASTAP (Astrometric STAcking Program) is a fast plate solver that uses
     a quad-tree star pattern matching algorithm. This service wraps the
     ASTAP CLI and parses INI output for WCS solutions.
@@ -96,7 +100,7 @@ class ASTAPService:
         self.data_root = Path(data_root)
         self.platesolve_dir = self.data_root / "platesolve"
         self.timeout_sec = timeout_sec
-        
+
         # In-memory session storage (production would use Redis/database)
         self._sessions: Dict[str, PlatesolvingResult] = {}
 
@@ -128,10 +132,10 @@ class ASTAPService:
 
         # Build ASTAP command
         cmd = [self.astap_bin, "-f", str(image_path)]
-        
+
         if fov_deg is not None:
             cmd.extend(["-fov", str(fov_deg)])
-        
+
         if downsample > 0:
             cmd.extend(["-z", str(downsample)])
 
@@ -191,18 +195,22 @@ class ASTAPService:
         # Build ASTAP command with position hint
         # ASTAP uses -ra (hours) and -spd (south pole distance = 90 + dec)
         spd = 90.0 + dec_degrees
-        
+
         cmd = [
             self.astap_bin,
-            "-f", str(image_path),
-            "-ra", str(ra_hours),
-            "-spd", str(spd),
-            "-r", str(search_radius_deg),
+            "-f",
+            str(image_path),
+            "-ra",
+            str(ra_hours),
+            "-spd",
+            str(spd),
+            "-r",
+            str(search_radius_deg),
         ]
-        
+
         if fov_deg is not None:
             cmd.extend(["-fov", str(fov_deg)])
-        
+
         if downsample > 0:
             cmd.extend(["-z", str(downsample)])
 
@@ -219,8 +227,7 @@ class ASTAPService:
 
             # Calculate offset from expected position
             offset = self._calculate_offset(
-                ra_hours, dec_degrees,
-                solution.ra_hours, solution.dec_degrees
+                ra_hours, dec_degrees, solution.ra_hours, solution.dec_degrees
             )
             result.offset_arcsec = offset["separation_arcsec"]
             result.offset_ra_arcsec = offset["ra_arcsec"]
@@ -297,7 +304,7 @@ class ASTAPService:
         PLTSOLVD=T  # Solution status
         """
         ini_text = ini_path.read_text()
-        
+
         # Extract WCS parameters using regex
         def extract_float(pattern: str) -> float:
             match = re.search(pattern, ini_text)
@@ -321,18 +328,22 @@ class ASTAPService:
         rotation_deg = extract_float(r"CROTA1=([\d.-]+)")
         cdelt1 = extract_float(r"CDELT1=([\d.-]+)")
         cdelt2 = extract_float(r"CDELT2=([\d.-]+)")
-        
+
         # Optional parameters
         num_stars = extract_int(r"NRSTARS=(\d+)", default=0)
-        
+
         # Calculate pixel scale (average of x/y)
         pixel_scale_deg = (abs(cdelt1) + abs(cdelt2)) / 2.0
         pixel_scale_arcsec = pixel_scale_deg * 3600.0
-        
+
         # Estimate FOV (ASTAP may provide FOVX/FOVY)
-        fov_width = extract_float(r"FOVX=([\d.-]+)") if "FOVX=" in ini_text else pixel_scale_deg * 1000
-        fov_height = extract_float(r"FOVY=([\d.-]+)") if "FOVY=" in ini_text else pixel_scale_deg * 1000
-        
+        fov_width = (
+            extract_float(r"FOVX=([\d.-]+)") if "FOVX=" in ini_text else pixel_scale_deg * 1000
+        )
+        fov_height = (
+            extract_float(r"FOVY=([\d.-]+)") if "FOVY=" in ini_text else pixel_scale_deg * 1000
+        )
+
         # RMS residual (if available)
         residual_arcsec = extract_float(r"RMSERR=([\d.-]+)") if "RMSERR=" in ini_text else 0.0
 
@@ -378,11 +389,10 @@ class ASTAPService:
         # Haversine formula for great circle distance
         dra = ra2 - ra1
         ddec = dec2 - dec1
-        
-        a = math.sin(ddec / 2) ** 2 + \
-            math.cos(dec1) * math.cos(dec2) * math.sin(dra / 2) ** 2
+
+        a = math.sin(ddec / 2) ** 2 + math.cos(dec1) * math.cos(dec2) * math.sin(dra / 2) ** 2
         c = 2 * math.asin(math.sqrt(a))
-        
+
         separation_rad = c
         separation_arcsec = math.degrees(separation_rad) * 3600.0
 

@@ -33,19 +33,27 @@ astap_service = ASTAPService(
 # Request/Response Models
 # ============================================================================
 
+
 class SolveRequest(BaseModel):
     """Plate solve request with mode selection"""
+
     mode: str = Field(..., description="Solving mode: 'blind' or 'hint'")
     image_path: str = Field(..., description="Path to FITS/image file")
-    
+
     # Hint mode parameters
     expected_ra_hours: Optional[float] = Field(None, description="Expected RA in hours (0-24)")
-    expected_dec_degrees: Optional[float] = Field(None, description="Expected Dec in degrees (-90 to +90)")
-    search_radius_deg: Optional[float] = Field(5.0, description="Search radius in degrees (hint mode)")
-    
+    expected_dec_degrees: Optional[float] = Field(
+        None, description="Expected Dec in degrees (-90 to +90)"
+    )
+    search_radius_deg: Optional[float] = Field(
+        5.0, description="Search radius in degrees (hint mode)"
+    )
+
     # Optional parameters
     fov_deg: Optional[float] = Field(None, description="Field of view estimate in degrees")
-    downsample: Optional[int] = Field(0, description="Downsample factor (0=auto, 1=none, 2=2x2, etc.)")
+    downsample: Optional[int] = Field(
+        0, description="Downsample factor (0=auto, 1=none, 2=2x2, etc.)"
+    )
 
     class Config:
         json_schema_extra = {
@@ -62,6 +70,7 @@ class SolveRequest(BaseModel):
 
 class WCSSolutionResponse(BaseModel):
     """WCS solution response model"""
+
     ra_hours: float = Field(..., description="Right Ascension in decimal hours")
     dec_degrees: float = Field(..., description="Declination in decimal degrees")
     rotation_deg: float = Field(..., description="Field rotation in degrees")
@@ -74,6 +83,7 @@ class WCSSolutionResponse(BaseModel):
 
 class SolveResponse(BaseModel):
     """Plate solving result response"""
+
     session_id: str
     status: str
     mode: str
@@ -91,6 +101,7 @@ class SolveResponse(BaseModel):
 
 class SessionListResponse(BaseModel):
     """List of plate solve sessions"""
+
     sessions: List[str]
     count: int
 
@@ -98,6 +109,7 @@ class SessionListResponse(BaseModel):
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
 
 def _result_to_response(result: PlatesolvingResult) -> SolveResponse:
     """Convert PlatesolvingResult to API response model"""
@@ -135,18 +147,19 @@ def _result_to_response(result: PlatesolvingResult) -> SolveResponse:
 # API Endpoints
 # ============================================================================
 
+
 @router.post("/solve", response_model=SolveResponse)
 async def solve_image(request: SolveRequest):
     """
     Perform plate solving on an image.
-    
+
     Supports two modes:
     - **blind**: No position hint, full-sky search (slower)
     - **hint**: Use expected position to constrain search (faster)
-    
+
     For hint mode, provide expected_ra_hours and expected_dec_degrees.
     Result will include offset from expected position.
-    
+
     **Example (hint mode):**
     ```json
     {
@@ -158,7 +171,7 @@ async def solve_image(request: SolveRequest):
       "fov_deg": 1.2
     }
     ```
-    
+
     **Example (blind mode):**
     ```json
     {
@@ -172,23 +185,25 @@ async def solve_image(request: SolveRequest):
     image_path = Path(request.image_path)
     if not image_path.exists():
         raise HTTPException(status_code=404, detail=f"Image not found: {request.image_path}")
-    
+
     # Validate mode
     if request.mode not in ["blind", "hint"]:
-        raise HTTPException(status_code=400, detail=f"Invalid mode: {request.mode}. Must be 'blind' or 'hint'")
-    
+        raise HTTPException(
+            status_code=400, detail=f"Invalid mode: {request.mode}. Must be 'blind' or 'hint'"
+        )
+
     # Validate hint mode parameters
     if request.mode == "hint":
         if request.expected_ra_hours is None or request.expected_dec_degrees is None:
             raise HTTPException(
                 status_code=400,
-                detail="Hint mode requires expected_ra_hours and expected_dec_degrees"
+                detail="Hint mode requires expected_ra_hours and expected_dec_degrees",
             )
         if not (0 <= request.expected_ra_hours <= 24):
             raise HTTPException(status_code=400, detail="expected_ra_hours must be 0-24")
         if not (-90 <= request.expected_dec_degrees <= 90):
             raise HTTPException(status_code=400, detail="expected_dec_degrees must be -90 to +90")
-    
+
     # Execute plate solve
     try:
         if request.mode == "blind":
@@ -208,7 +223,7 @@ async def solve_image(request: SolveRequest):
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Plate solve error: {str(e)}")
-    
+
     return _result_to_response(result)
 
 
@@ -216,15 +231,15 @@ async def solve_image(request: SolveRequest):
 async def get_solve_result(session_id: str):
     """
     Get plate solving result by session ID.
-    
+
     Returns the complete result including WCS solution and offset calculations.
     Status can be: pending, running, success, failed, timeout.
     """
     result = astap_service.get_result(session_id)
-    
+
     if result is None:
         raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
-    
+
     return _result_to_response(result)
 
 
@@ -232,7 +247,7 @@ async def get_solve_result(session_id: str):
 async def list_solve_sessions():
     """
     List all plate solving session IDs.
-    
+
     Useful for tracking active and completed solves.
     """
     sessions = astap_service.list_sessions()
@@ -251,10 +266,10 @@ async def solve_uploaded_image(
 ):
     """
     Upload an image and perform plate solving.
-    
+
     Convenience endpoint for solving images not yet on disk.
     Saves uploaded file to /data/seestar/platesolve/ before solving.
-    
+
     **Form Parameters:**
     - file: Image file (FITS, PNG, JPG)
     - mode: 'blind' or 'hint'
@@ -267,23 +282,23 @@ async def solve_uploaded_image(
     # Validate mode
     if mode not in ["blind", "hint"]:
         raise HTTPException(status_code=400, detail=f"Invalid mode: {mode}")
-    
+
     # Validate hint mode parameters
     if mode == "hint":
         if expected_ra_hours is None or expected_dec_degrees is None:
             raise HTTPException(
                 status_code=400,
-                detail="Hint mode requires expected_ra_hours and expected_dec_degrees"
+                detail="Hint mode requires expected_ra_hours and expected_dec_degrees",
             )
-    
+
     # Save uploaded file
     platesolve_dir = Path("/data/seestar/platesolve")
     platesolve_dir.mkdir(parents=True, exist_ok=True)
-    
+
     file_path = platesolve_dir / file.filename
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
+
     # Create solve request
     request = SolveRequest(
         mode=mode,
@@ -294,6 +309,6 @@ async def solve_uploaded_image(
         fov_deg=fov_deg,
         downsample=downsample,
     )
-    
+
     # Execute solve via main endpoint logic
     return await solve_image(request)
