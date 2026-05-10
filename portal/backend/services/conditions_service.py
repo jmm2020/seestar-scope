@@ -11,7 +11,6 @@ import math
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
 
 import httpx
 from astropy.coordinates import EarthLocation, AltAz, get_body, get_sun, solar_system_ephemeris
@@ -37,10 +36,10 @@ class SiteLocation:
 class WeatherData:
     """Weather snapshot. weather_api_ok=False indicates degraded mode."""
 
-    cloud_cover_pct: Optional[int] = None
-    wind_speed_ms: Optional[float] = None
-    humidity_pct: Optional[int] = None
-    temperature_c: Optional[float] = None
+    cloud_cover_pct: int | None = None
+    wind_speed_ms: float | None = None
+    humidity_pct: int | None = None
+    temperature_c: float | None = None
     weather_api_ok: bool = False
 
 
@@ -107,7 +106,7 @@ class ConditionsService:
             timestamp=astro.utc_time,
         )
 
-    def get_forecast(self, hours: int = 12) -> List[ConditionsData]:
+    def get_forecast(self, hours: int = 12) -> list[ConditionsData]:
         """Return per-hour conditions for the next N hours.
 
         Astro data is computed locally for each hour. Weather is fetched
@@ -116,10 +115,10 @@ class ConditionsService:
         hours = max(1, min(int(hours), 48))  # clamp to 1..48
         weather_by_hour = self._fetch_hourly_weather(hours)
 
-        results: List[ConditionsData] = []
         # Use UTC now floored to the hour as the forecast anchor so it lines up
         # with Open-Meteo's hourly grid.
         anchor = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        results = []
         for i in range(hours):
             t = anchor + timedelta(hours=i)
             astro = self._compute_astro(Time(t))
@@ -195,7 +194,7 @@ class ConditionsService:
             logger.warning(f"Open-Meteo current weather parse/unexpected error: {e}", exc_info=True)
             return WeatherData(weather_api_ok=False)
 
-    def _fetch_hourly_weather(self, hours: int) -> List[WeatherData]:
+    def _fetch_hourly_weather(self, hours: int) -> list[WeatherData]:
         """Fetch hourly forecast from Open-Meteo.
 
         Always returns a list of exactly `hours` WeatherData entries.
@@ -224,20 +223,18 @@ class ConditionsService:
                     f"Open-Meteo returned {n}/{hours} forecast points "
                     f"(cloud={len(cloud)}, wind={len(wind)}, humidity={len(humidity)}, temp={len(temp)})"
                 )
-            out: List[WeatherData] = []
-            for i in range(n):
-                out.append(
-                    WeatherData(
-                        cloud_cover_pct=_as_int(cloud[i]),
-                        wind_speed_ms=_as_float(wind[i]),
-                        humidity_pct=_as_int(humidity[i]),
-                        temperature_c=_as_float(temp[i]),
-                        weather_api_ok=True,
-                    )
+            out = [
+                WeatherData(
+                    cloud_cover_pct=_as_int(cloud[i]),
+                    wind_speed_ms=_as_float(wind[i]),
+                    humidity_pct=_as_int(humidity[i]),
+                    temperature_c=_as_float(temp[i]),
+                    weather_api_ok=True,
                 )
+                for i in range(n)
+            ]
             # Pad with degraded entries if API returned fewer points than requested
-            while len(out) < hours:
-                out.append(WeatherData(weather_api_ok=False))
+            out += [WeatherData(weather_api_ok=False)] * (hours - n)
             return out
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
             logger.warning(f"Open-Meteo hourly forecast unreachable: {e}")
@@ -247,7 +244,7 @@ class ConditionsService:
             return [WeatherData(weather_api_ok=False) for _ in range(hours)]
 
 
-def _as_int(value) -> Optional[int]:
+def _as_int(value) -> int | None:
     if value is None:
         return None
     try:
@@ -256,7 +253,7 @@ def _as_int(value) -> Optional[int]:
         return None
 
 
-def _as_float(value) -> Optional[float]:
+def _as_float(value) -> float | None:
     if value is None:
         return None
     try:

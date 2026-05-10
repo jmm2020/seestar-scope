@@ -10,7 +10,6 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional, List
 import logging
 
 from ..services.conditions_service import ConditionsService, SiteLocation
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/conditions", tags=["conditions"])
 
 # Global service instance (initialized on first use)
-_conditions_service: Optional[ConditionsService] = None
+_conditions_service: ConditionsService | None = None
 
 
 def get_conditions_service() -> ConditionsService:
@@ -38,16 +37,11 @@ def get_conditions_service() -> ConditionsService:
     return _conditions_service
 
 
-# ============================================================================
-# Pydantic Models for API
-# ============================================================================
-
-
 class WeatherResponse(BaseModel):
-    cloud_cover_pct: Optional[int]
-    wind_speed_ms: Optional[float]
-    humidity_pct: Optional[int]
-    temperature_c: Optional[float]
+    cloud_cover_pct: int | None
+    wind_speed_ms: float | None
+    humidity_pct: int | None
+    temperature_c: float | None
     weather_api_ok: bool
 
 
@@ -95,11 +89,6 @@ def _to_response(data) -> ConditionsResponse:
     )
 
 
-# ============================================================================
-# Endpoints
-# ============================================================================
-
-
 @router.get("/current", response_model=ConditionsResponse)
 async def get_current_conditions():
     """Return current observing conditions (astro + weather)."""
@@ -112,7 +101,7 @@ async def get_current_conditions():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/forecast", response_model=List[ConditionsResponse])
+@router.get("/forecast", response_model=list[ConditionsResponse])
 async def get_forecast(
     hours: int = Query(12, ge=1, le=48, description="Forecast horizon in hours (1-48)"),
 ):

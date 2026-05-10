@@ -57,11 +57,8 @@ async def lifespan(app: FastAPI):
     alpaca.disconnect_all()
     close_database()
 
-    # Teardown conditions service HTTP client
-    from backend.routers import conditions as _conditions_mod
-
-    if _conditions_mod._conditions_service is not None:
-        _conditions_mod._conditions_service.close()
+    if conditions._conditions_service is not None:
+        conditions._conditions_service.close()
 
 
 # Initialize FastAPI app
