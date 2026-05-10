@@ -122,7 +122,7 @@ async def root():
             "sessions": "/api/sessions/*",
             "conditions": "/api/conditions/*",
             "stacking": "/api/stacking/*",
-            "status_ws": "ws://192.168.0.148:8503/api/status/ws",
+            "status_ws": "ws://<host>:8503/api/status/ws",
             "status_connections": "/api/status/connections",
             "docs": "/docs",
             "health": "/health",

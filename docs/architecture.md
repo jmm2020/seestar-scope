@@ -53,6 +53,11 @@ The ALP backend talks to the S50 directly via TCP.
 | `views/goto.py` | GoTo/Slew — manual coords, Stellarium, Messier/NGC catalog |
 | `views/imaging.py` | Camera control — exposure, gain, filter, loop mode; live-stack WebSocket panel |
 | `views/stacking.py` | Siril stacking session management UI (start/add-frame/process/abort) |
+| `views/autofocus.py` | Autofocus V-curve run — drive focuser to HFR minimum |
+| `views/gallery.py` | Image gallery — browse captured frames, thumbnails, post-processing trigger |
+| `views/live_status.py` | WebSocket status dashboard — active client count + telescope telemetry stream |
+| `views/platesolve.py` | Plate solving — upload/solve FITS frames via ASTAP integration |
+| `views/skymap.py` | Sky map — Stellarium-web embed for target selection |
 | `views/focus.py` | Focuser position control |
 | `views/sequence.py` | Multi-target automated imaging sequences |
 | `views/sessions.py` | Observation history view — session list, detail, re-open |
@@ -79,9 +84,20 @@ The FastAPI backend (`seestar-portal-backend`, port `:8503`) handles all persist
 | `routers/postprocessing.py` | POST `/api/postprocessing/apply` (async job), GET `/jobs/{id}`, calibration frame CRUD |
 | `routers/gallery.py` | Image gallery CRUD, thumbnail serving |
 | `routers/autofocus.py` | Autofocus run endpoint |
+| `routers/platesolve.py` | Plate-solve REST endpoints — ASTAP integration |
+| `routers/sessions.py` | Sessions CRUD — 6 endpoints under `/api/sessions` (note: also registered at `main.py:102` with explicit prefix) |
+| `routers/conditions.py` | Observing conditions — `/api/conditions/current` + `/api/conditions/forecast` |
+| `routers/status_ws.py` | WebSocket status stream + `/api/status/connections` REST endpoint |
+| `routers/telescope.py` | Full ALPACA bridge — `/api/telescope/*` (telescope, camera, focuser, filter, dew-heater, Stellarium passthrough) |
+| `routers/stacking.py` | Stacking session pipeline — `POST /api/stacking/{start,add-frame,process,abort}`, `GET /api/stacking/{status,config}` |
+| `routers/processing.py` | Legacy Siril processing pipeline — `/api/processing/*`; imports `app/services/siril_service.py` |
 | `services/postprocessing_service.py` | Enhancement pipeline: calibration frame management + `apply_pipeline()` |
 | `services/autofocus_service.py` | Autofocus algorithm service |
-| `services/siril_service.py` | Siril stacking integration |
+| `services/stacking_service.py` | Siril stacking session pipeline (convert → SSF → siril-cli → gallery) |
+| `services/conditions_service.py` | ConditionsService — astropy + Open-Meteo; graceful offline degradation |
+| `services/platesolve_service.py` | Plate-solve orchestration — ASTAP subprocess + result parsing |
+| `app/services/siril_service.py` | Legacy Siril service (used by `routers/processing.py`) — full stacking + registration pipeline |
+| `app/routers/processing.py` | Legacy processing router (imported for `auto_trigger_processing` helper) |
 
 **Security note**: `image_path` in `PostprocessingRequest` is restricted to `captures_dir`, `gallery_dir`, and `processing_dir` via Pydantic validator to prevent path traversal.
 
