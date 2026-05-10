@@ -27,3 +27,9 @@ auto_save = false                  # auto-save after each capture
 [catalog]
 use_builtin = true                 # use built-in Messier/NGC catalog
 use_stellarium_lookup = true       # also use Stellarium for object lookup
+
+[site]
+latitude = 37.12                   # degrees N (positive), S (negative)
+longitude = -123.45                # degrees E (positive), W (negative)
+elevation_m = 0                    # meters above sea level
+name = "My Observatory"

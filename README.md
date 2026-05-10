@@ -9,8 +9,8 @@ Browser
   │
   ▼
 ┌─────────────────────────────────────────────┐
-│  portal (Streamlit)  :8502                  │
-│  UI — control, imaging, live-stack, sequences, GoTo  │
+│  portal (Streamlit)  :8502                                       │
+│  UI — control, imaging, live-stack, sequences, GoTo, conditions  │
 └──────────────────┬──────────────────────────┘
                    │ ASCOM ALPACA REST
                    ▼

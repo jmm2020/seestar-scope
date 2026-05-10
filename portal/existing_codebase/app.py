@@ -2,6 +2,7 @@
 
 Main Streamlit entry point with sidebar navigation and page routing.
 """
+
 import streamlit as st
 import logging
 
@@ -94,40 +95,50 @@ with st.sidebar:
 
 if page == "Dashboard":
     from views.dashboard import render_dashboard
+
     render_dashboard(alpaca, stellarium)
 
 elif page == "GoTo":
     from views.goto import render_goto
+
     render_goto(alpaca, stellarium)
 
 elif page == "Imaging":
     from views.imaging import render_imaging
+
     render_imaging(alpaca, config)
 
 elif page == "Focus":
     from views.focus import render_focus
+
     render_focus(alpaca)
 
 elif page == "Autofocus":
     from views.autofocus import render_autofocus
+
     render_autofocus(alpaca)
 
 elif page == "Plate Solve":
     from views.platesolve import render_platesolve
+
     render_platesolve()
 
 elif page == "Sequence":
     from views.sequence import render_sequence
+
     render_sequence(alpaca, stellarium)
 
 elif page == "Gallery":
     from views.gallery import render_gallery
+
     render_gallery()
 
 elif page == "Live Status":
     from views.live_status import render_live_status
+
     render_live_status(alpaca)
 
 elif page == "Settings":
     from views.settings import render_settings
+
     render_settings(config, alpaca, stellarium)

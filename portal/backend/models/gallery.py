@@ -17,8 +17,10 @@ from pydantic import BaseModel, Field
 # Pydantic Models (for API interaction)
 # ============================================================================
 
+
 class ImageMetadata(BaseModel):
     """Metadata extracted from FITS header or imaging session."""
+
     target: str = Field(..., description="Target object name (e.g., M31, NGC7000)")
     exposure: float = Field(..., description="Exposure time in seconds")
     gain: int = Field(..., ge=0, le=400, description="Sensor gain (0-400)")
@@ -33,6 +35,7 @@ class ImageMetadata(BaseModel):
 
 class ImageRecord(BaseModel):
     """Complete record of a captured image in the gallery."""
+
     id: Optional[int] = Field(None, description="Auto-increment primary key")
     fits_path: str = Field(..., description="Path to FITS file")
     png_path: str = Field(..., description="Path to PNG preview")
@@ -52,6 +55,7 @@ class ImageRecord(BaseModel):
 
 class GalleryFilter(BaseModel):
     """Filter criteria for gallery searches."""
+
     target: Optional[str] = Field(None, description="Target name (partial match)")
     session_id: Optional[str] = Field(None, description="Exact session ID")
     start_date: Optional[datetime] = Field(None, description="Start of date range")
@@ -68,6 +72,7 @@ class GalleryFilter(BaseModel):
 
 class GalleryStats(BaseModel):
     """Gallery statistics summary."""
+
     total_images: int
     total_sessions: int
     targets: Dict[str, int]
@@ -81,6 +86,7 @@ class GalleryStats(BaseModel):
 # ============================================================================
 # SQLite Schema and Database Interface
 # ============================================================================
+
 
 class GalleryDatabase:
     """SQLite database for image gallery indexing."""
@@ -142,36 +148,37 @@ class GalleryDatabase:
 
     def _row_to_record(self, row) -> ImageRecord:
         metadata = ImageMetadata(
-            target=row['target'],
-            exposure=row['exposure'],
-            gain=row['gain'],
-            filter=row['filter'],
-            ra=row['ra'],
-            dec=row['dec'],
-            temperature=row['temperature'],
-            binning=row['binning'],
-            observer=row['observer'],
-            telescope=row['telescope']
+            target=row["target"],
+            exposure=row["exposure"],
+            gain=row["gain"],
+            filter=row["filter"],
+            ra=row["ra"],
+            dec=row["dec"],
+            temperature=row["temperature"],
+            binning=row["binning"],
+            observer=row["observer"],
+            telescope=row["telescope"],
         )
         return ImageRecord(
-            id=row['id'],
-            fits_path=row['fits_path'],
-            png_path=row['png_path'],
-            session_id=row['session_id'],
-            captured_at=datetime.fromisoformat(row['captured_at']),
+            id=row["id"],
+            fits_path=row["fits_path"],
+            png_path=row["png_path"],
+            session_id=row["session_id"],
+            captured_at=datetime.fromisoformat(row["captured_at"]),
             metadata=metadata,
-            processed=bool(row['processed']),
-            processed_path=row['processed_path'],
-            stacked=bool(row['stacked']),
-            stack_id=row['stack_id'],
-            tags=json.loads(row['tags']) if row['tags'] else [],
-            notes=row['notes'],
-            quality_score=row['quality_score']
+            processed=bool(row["processed"]),
+            processed_path=row["processed_path"],
+            stacked=bool(row["stacked"]),
+            stack_id=row["stack_id"],
+            tags=json.loads(row["tags"]) if row["tags"] else [],
+            notes=row["notes"],
+            quality_score=row["quality_score"],
         )
 
     def add_image(self, record: ImageRecord) -> int:
         """Insert new image record. Returns the new record ID."""
-        cursor = self.conn.execute("""
+        cursor = self.conn.execute(
+            """
             INSERT INTO images (
                 fits_path, png_path, session_id, captured_at,
                 target, exposure, gain, filter, ra, dec, temperature,
@@ -179,16 +186,31 @@ class GalleryDatabase:
                 processed, processed_path, stacked, stack_id,
                 tags, notes, quality_score
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            record.fits_path, record.png_path, record.session_id,
-            record.captured_at.isoformat(),
-            record.metadata.target, record.metadata.exposure, record.metadata.gain,
-            record.metadata.filter, record.metadata.ra, record.metadata.dec,
-            record.metadata.temperature, record.metadata.binning,
-            record.metadata.observer, record.metadata.telescope,
-            record.processed, record.processed_path, record.stacked, record.stack_id,
-            json.dumps(record.tags), record.notes, record.quality_score
-        ))
+        """,
+            (
+                record.fits_path,
+                record.png_path,
+                record.session_id,
+                record.captured_at.isoformat(),
+                record.metadata.target,
+                record.metadata.exposure,
+                record.metadata.gain,
+                record.metadata.filter,
+                record.metadata.ra,
+                record.metadata.dec,
+                record.metadata.temperature,
+                record.metadata.binning,
+                record.metadata.observer,
+                record.metadata.telescope,
+                record.processed,
+                record.processed_path,
+                record.stacked,
+                record.stack_id,
+                json.dumps(record.tags),
+                record.notes,
+                record.quality_score,
+            ),
+        )
         self.conn.commit()
         return cursor.lastrowid
 
@@ -253,23 +275,25 @@ class GalleryDatabase:
         row = cursor.fetchone()
 
         cursor = self.conn.execute("SELECT target, COUNT(*) as cnt FROM images GROUP BY target")
-        targets = {r['target']: r['cnt'] for r in cursor.fetchall()}
+        targets = {r["target"]: r["cnt"] for r in cursor.fetchall()}
 
         cursor = self.conn.execute("SELECT filter, COUNT(*) as cnt FROM images GROUP BY filter")
-        filters = {r['filter']: r['cnt'] for r in cursor.fetchall()}
+        filters = {r["filter"]: r["cnt"] for r in cursor.fetchall()}
 
-        earliest = datetime.fromisoformat(row['earliest']) if row['earliest'] else None
-        latest = datetime.fromisoformat(row['latest']) if row['latest'] else None
+        earliest = datetime.fromisoformat(row["earliest"]) if row["earliest"] else None
+        latest = datetime.fromisoformat(row["latest"]) if row["latest"] else None
 
         return GalleryStats(
-            total_images=row['total'],
-            total_sessions=row['sessions'],
+            total_images=row["total"],
+            total_sessions=row["sessions"],
             targets=targets,
             filters=filters,
-            total_exposure_hours=row['total_exposure_seconds'] / 3600.0 if row['total_exposure_seconds'] else 0.0,
+            total_exposure_hours=row["total_exposure_seconds"] / 3600.0
+            if row["total_exposure_seconds"]
+            else 0.0,
             date_range=(earliest, latest),
-            processed_count=row['processed'],
-            stacked_count=row['stacked']
+            processed_count=row["processed"],
+            stacked_count=row["stacked"],
         )
 
     def get_by_id(self, image_id: int) -> Optional[ImageRecord]:
@@ -282,11 +306,14 @@ class GalleryDatabase:
 
     def update_processing_status(self, image_id: int, processed_path: str):
         """Mark image as processed and record output path."""
-        self.conn.execute("""
+        self.conn.execute(
+            """
             UPDATE images
             SET processed = 1, processed_path = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (processed_path, image_id))
+        """,
+            (processed_path, image_id),
+        )
         self.conn.commit()
 
     def add_tags(self, image_id: int, tags: List[str]):
@@ -294,11 +321,11 @@ class GalleryDatabase:
         cursor = self.conn.execute("SELECT tags FROM images WHERE id = ?", (image_id,))
         row = cursor.fetchone()
         if row:
-            existing = json.loads(row['tags']) if row['tags'] else []
+            existing = json.loads(row["tags"]) if row["tags"] else []
             merged = list(set(existing + tags))
             self.conn.execute(
                 "UPDATE images SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (json.dumps(merged), image_id)
+                (json.dumps(merged), image_id),
             )
             self.conn.commit()
 
@@ -311,29 +338,27 @@ class GalleryDatabase:
 # Helper Functions
 # ============================================================================
 
+
 def create_gallery_record_from_dual_save(
-    fits_path: str,
-    png_path: str,
-    metadata: Dict[str, Any],
-    session_id: str
+    fits_path: str, png_path: str, metadata: Dict[str, Any], session_id: str
 ) -> ImageRecord:
     """Create ImageRecord from the dual-format save output."""
     img_metadata = ImageMetadata(
-        target=metadata['target'],
-        exposure=metadata['exposure'],
-        gain=metadata['gain'],
-        filter=metadata.get('filter', 'L'),
-        ra=metadata.get('ra'),
-        dec=metadata.get('dec'),
-        temperature=metadata.get('temperature'),
-        binning=metadata.get('binning', '1x1'),
-        observer=metadata.get('observer'),
-        telescope=metadata.get('telescope', 'Seestar S50')
+        target=metadata["target"],
+        exposure=metadata["exposure"],
+        gain=metadata["gain"],
+        filter=metadata.get("filter", "L"),
+        ra=metadata.get("ra"),
+        dec=metadata.get("dec"),
+        temperature=metadata.get("temperature"),
+        binning=metadata.get("binning", "1x1"),
+        observer=metadata.get("observer"),
+        telescope=metadata.get("telescope", "Seestar S50"),
     )
     return ImageRecord(
         fits_path=fits_path,
         png_path=png_path,
         session_id=session_id,
         captured_at=datetime.utcnow(),
-        metadata=img_metadata
+        metadata=img_metadata,
     )

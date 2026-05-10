@@ -1,4 +1,5 @@
 """Tests for star catalog lookups."""
+
 import sys
 from pathlib import Path
 

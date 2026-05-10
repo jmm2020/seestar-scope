@@ -1,4 +1,5 @@
 """Camera control and image capture page."""
+
 import streamlit as st
 import time
 
@@ -25,23 +26,34 @@ def _render_camera_status(alpaca):
 
         col_state, col_gain, col_filter = st.columns(3)
         with col_state:
-            st.metric("Camera State", state_text,
-                      help="Idle = ready, Exposing = capturing light, "
-                           "Reading = transferring from sensor, Error = problem detected")
+            st.metric(
+                "Camera State",
+                state_text,
+                help="Idle = ready, Exposing = capturing light, "
+                "Reading = transferring from sensor, Error = problem detected",
+            )
         with col_gain:
-            st.metric("Current Gain", gain if gain is not None else "N/A",
-                      help="Sony IMX462 sensor gain (0-400). Higher = brighter "
-                           "but noisier. This shows the value currently set on the camera.")
+            st.metric(
+                "Current Gain",
+                gain if gain is not None else "N/A",
+                help="Sony IMX462 sensor gain (0-400). Higher = brighter "
+                "but noisier. This shows the value currently set on the camera.",
+            )
         with col_filter:
             try:
                 names = alpaca.get_filter_names()
                 pos = alpaca.get_filter_position()
-                current = names[pos] if names and pos is not None and pos < len(names) else "Unknown"
+                current = (
+                    names[pos] if names and pos is not None and pos < len(names) else "Unknown"
+                )
             except Exception:
                 current = "N/A"
-            st.metric("Filter", current,
-                      help="Active filter: Dark = no filter (darks/bias), "
-                           "IR = infrared cut (visual), LP = light pollution")
+            st.metric(
+                "Filter",
+                current,
+                help="Active filter: Dark = no filter (darks/bias), "
+                "IR = infrared cut (visual), LP = light pollution",
+            )
 
         return state_code
     except Exception as e:
@@ -52,7 +64,9 @@ def _render_camera_status(alpaca):
 def _render_exposure_controls(alpaca):
     """Exposure time, gain, and filter controls."""
     st.subheader("Exposure Settings")
-    st.caption("Adjust exposure time, sensor gain, and filter. Click Set Gain / Set Filter to send changes to the camera.")
+    st.caption(
+        "Adjust exposure time, sensor gain, and filter. Click Set Gain / Set Filter to send changes to the camera."
+    )
 
     # Sync widget defaults from hardware on first visit
     try:
@@ -87,7 +101,7 @@ def _render_exposure_controls(alpaca):
             format="%.3f",
             key="exposure_input",
             help="Duration of each exposure. 0.001-1s for planets/moon, "
-                 "5-30s for deep sky, up to 2000s for very faint targets.",
+            "5-30s for deep sky, up to 2000s for very faint targets.",
         )
         st.session_state["img_exposure"] = exposure
 
@@ -99,10 +113,14 @@ def _render_exposure_controls(alpaca):
             step=1,
             key="gain_slider",
             help="Sensor amplification. 0-80 = low noise (deep sky), "
-                 "80-200 = balanced, 200-400 = bright but noisy (planets).",
+            "80-200 = balanced, 200-400 = bright but noisy (planets).",
         )
-        if st.button("Set Gain", key="apply_gain", use_container_width=True,
-                     help="Send the selected gain value to the camera hardware."):
+        if st.button(
+            "Set Gain",
+            key="apply_gain",
+            use_container_width=True,
+            help="Send the selected gain value to the camera hardware.",
+        ):
             resp = alpaca.set_gain(gain)
             if resp.success:
                 st.rerun()
@@ -116,8 +134,12 @@ def _render_exposure_controls(alpaca):
             format_func=lambda i: filter_names[i] if i < len(filter_names) else f"Filter {i}",
             key="filter_select",
         )
-        if st.button("Set Filter", key="apply_filter", use_container_width=True,
-                     help="Switch the physical filter wheel to the selected position."):
+        if st.button(
+            "Set Filter",
+            key="apply_filter",
+            use_container_width=True,
+            help="Switch the physical filter wheel to the selected position.",
+        ):
             resp = alpaca.set_filter(filter_choice)
             if resp.success:
                 st.rerun()
@@ -134,10 +156,14 @@ def _render_capture_controls(alpaca, exposure):
     col_cap, col_abort, col_loop = st.columns([2, 1, 2])
 
     with col_cap:
-        if st.button("Capture", type="primary", use_container_width=True,
-                      key="btn_capture",
-                      help="Start a single exposure with the current settings. "
-                           "The image will appear in Preview when done."):
+        if st.button(
+            "Capture",
+            type="primary",
+            use_container_width=True,
+            key="btn_capture",
+            help="Start a single exposure with the current settings. "
+            "The image will appear in Preview when done.",
+        ):
             resp = alpaca.start_exposure(exposure, light=True)
             if resp.success:
                 st.session_state["exposing"] = True
@@ -148,9 +174,12 @@ def _render_capture_controls(alpaca, exposure):
                 st.error(f"Capture failed: {resp.error_message}")
 
     with col_abort:
-        if st.button("Abort", use_container_width=True, key="btn_abort",
-                     help="Stop the current exposure immediately. "
-                          "Partial data will be discarded."):
+        if st.button(
+            "Abort",
+            use_container_width=True,
+            key="btn_abort",
+            help="Stop the current exposure immediately. Partial data will be discarded.",
+        ):
             resp = alpaca.abort_exposure()
             if resp.success:
                 st.session_state["exposing"] = False
@@ -159,9 +188,12 @@ def _render_capture_controls(alpaca, exposure):
                 st.error(f"Abort failed: {resp.error_message}")
 
     with col_loop:
-        loop_enabled = st.checkbox("Loop Mode", key="loop_mode",
-                                   help="Automatically capture multiple frames in sequence. "
-                                        "Images are auto-saved to the capture directory.")
+        loop_enabled = st.checkbox(
+            "Loop Mode",
+            key="loop_mode",
+            help="Automatically capture multiple frames in sequence. "
+            "Images are auto-saved to the capture directory.",
+        )
         if loop_enabled:
             frame_count = st.number_input(
                 "Frames",
@@ -246,10 +278,13 @@ def _render_preview_and_save(alpaca, config):
     st.subheader("Preview")
 
     # Stretch toggle
-    use_stretch = st.checkbox("Apply histogram stretch", value=True,
-                              key="stretch_toggle",
-                              help="Stretch the image histogram to reveal faint detail. "
-                                   "Uncheck to see the raw unprocessed image.")
+    use_stretch = st.checkbox(
+        "Apply histogram stretch",
+        value=True,
+        key="stretch_toggle",
+        help="Stretch the image histogram to reveal faint detail. "
+        "Uncheck to see the raw unprocessed image.",
+    )
     display_image = apply_stretch(image) if use_stretch else image
     st.image(display_image, caption="Captured Image", use_container_width=True)
 
@@ -264,8 +299,7 @@ def _render_preview_and_save(alpaca, config):
     with col_save:
         st.write("")
         st.write("")
-        if st.button("Save Image", type="primary", key="btn_save",
-                      use_container_width=True):
+        if st.button("Save Image", type="primary", key="btn_save", use_container_width=True):
             save_dir = getattr(config, "save_directory", "./captures")
             filepath = save_image(image, target_name, save_dir=save_dir)
             st.success(f"Saved: {filepath}")
@@ -279,8 +313,7 @@ def _render_preview_and_save(alpaca, config):
         # Auto-save in loop mode
         save_dir = getattr(config, "save_directory", "./captures")
         target_name = st.session_state.get("slewing_target", "loop")
-        filepath = save_image(image, f"{target_name}_frame{completed}",
-                              save_dir=save_dir)
+        filepath = save_image(image, f"{target_name}_frame{completed}", save_dir=save_dir)
         st.caption(f"Auto-saved frame {completed}: {filepath}")
 
         if completed < total:
@@ -295,8 +328,7 @@ def _render_preview_and_save(alpaca, config):
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error(f"Loop capture failed on frame {completed + 1}: "
-                         f"{resp.error_message}")
+                st.error(f"Loop capture failed on frame {completed + 1}: {resp.error_message}")
         else:
             st.success(f"Loop complete: {completed} frames captured")
             st.session_state["loop_completed"] = 0

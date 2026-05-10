@@ -1,4 +1,5 @@
 """SeestarScope star catalogs."""
+
 from .messier import (
     MESSIER_CATALOG,
     lookup_messier,
