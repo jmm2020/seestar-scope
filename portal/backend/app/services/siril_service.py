@@ -79,13 +79,10 @@ class SirilService:
         self.siril_bin = siril_bin
         self.gallery_dir = Path(gallery_dir) if gallery_dir else self.data_root / "gallery"
 
-        # Create directory structure
         self.lights_dir = self.data_root / "lights"
         self.processed_dir = self.data_root / "processed"
         self.stacked_dir = self.gallery_dir  # Output to gallery for indexing
 
-        for d in [self.lights_dir, self.processed_dir, self.stacked_dir]:
-            d.mkdir(parents=True, exist_ok=True)
 
     def process_session(
         self,
@@ -123,6 +120,10 @@ class SirilService:
                     status=ProcessingStatus.FAILED,
                     error_message="FITS file validation failed",
                 )
+
+            # Create directory structure (lazy — only when actually processing)
+            for d in [self.lights_dir, self.processed_dir, self.stacked_dir]:
+                d.mkdir(parents=True, exist_ok=True)
 
             # Create session working directory
             session_dir = self.processed_dir / session_id

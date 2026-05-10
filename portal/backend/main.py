@@ -18,6 +18,7 @@ from backend.routers import (
     autofocus,
     platesolve,
     conditions,
+    stacking,
 )
 from backend.config import settings
 from backend.database import init_database, close_database
@@ -85,6 +86,7 @@ app.include_router(processing.router, prefix="/api/processing", tags=["processin
 app.include_router(autofocus.router)  # prefix="/api/autofocus" defined in router
 app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in router
 app.include_router(conditions.router)  # prefix="/api/conditions" defined in router
+app.include_router(stacking.router)    # prefix="/api/stacking" defined in router
 app.include_router(status_ws.router)  # WebSocket: live telescope status stream
 
 
@@ -101,6 +103,7 @@ async def root():
             "autofocus": "/api/autofocus/*",
             "platesolve": "/api/platesolve/*",
             "conditions": "/api/conditions/*",
+            "stacking": "/api/stacking/*",
             "status_ws": "ws://192.168.0.148:8503/api/status/ws",
             "status_connections": "/api/status/connections",
             "docs": "/docs",
