@@ -1,4 +1,5 @@
 """Tests for SessionDatabase - in-memory SQLite, no live backend required."""
+
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -111,8 +112,10 @@ def test_add_stack_returns_id():
     db = _db()
     sid = db.create_session(target_name="M31")
     stack_id = db.add_stack(
-        session_id=sid, output_path="/out/stack.fits",
-        frame_count=10, algorithm="mean",
+        session_id=sid,
+        output_path="/out/stack.fits",
+        frame_count=10,
+        algorithm="mean",
     )
     assert isinstance(stack_id, int)
     stacks = db.get_stacks(sid)

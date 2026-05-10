@@ -1,4 +1,5 @@
 """Sessions history view — timeline of past observation sessions with frame detail."""
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -29,9 +30,7 @@ def _render_session_stats(sessions: List[dict], frames_by_session: dict):
     total_sessions = len(sessions)
     total_frames = sum(len(frames_by_session.get(s["id"], [])) for s in sessions)
     total_exposure_s = sum(
-        f.get("exposure_s", 0.0)
-        for s in sessions
-        for f in frames_by_session.get(s["id"], [])
+        f.get("exposure_s", 0.0) for s in sessions for f in frames_by_session.get(s["id"], [])
     )
 
     c1, c2, c3 = st.columns(3)
@@ -89,8 +88,12 @@ def _render_session_detail(session_id: int, client: SessionsClient):
     duration_min = _session_duration_minutes(session)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("RA (h)", f"{session['target_ra']:.3f}" if session.get("target_ra") is not None else "—")
-    c2.metric("Dec (°)", f"{session['target_dec']:.2f}" if session.get("target_dec") is not None else "—")
+    c1.metric(
+        "RA (h)", f"{session['target_ra']:.3f}" if session.get("target_ra") is not None else "—"
+    )
+    c2.metric(
+        "Dec (°)", f"{session['target_dec']:.2f}" if session.get("target_dec") is not None else "—"
+    )
     c3.metric("Started", started_dt.strftime("%Y-%m-%d %H:%M") if started_dt else "—")
     c4.metric("Duration", f"{duration_min:.1f}m" if duration_min is not None else "active")
 

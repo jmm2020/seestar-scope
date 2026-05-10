@@ -6,6 +6,7 @@ history without sharing in-process state with the FastAPI backend.
 Network failures are caught and logged — methods return None / [] so that
 Streamlit callers don't crash when the backend is offline.
 """
+
 import logging
 import os
 from datetime import datetime
@@ -20,11 +21,7 @@ class SessionsClient:
     """Thin wrapper around POST/GET /api/sessions/* endpoints."""
 
     def __init__(self, backend_url: Optional[str] = None, timeout: int = 10):
-        self.backend_url = (
-            backend_url
-            or os.environ.get("BACKEND_URL")
-            or "http://localhost:8503"
-        )
+        self.backend_url = backend_url or os.environ.get("BACKEND_URL") or "http://localhost:8503"
         self.timeout = timeout
         self.session = requests.Session()
 

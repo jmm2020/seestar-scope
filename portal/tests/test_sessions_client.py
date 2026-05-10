@@ -1,4 +1,5 @@
 """Tests for SessionsClient - mocked HTTP, no live backend required."""
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -31,8 +32,10 @@ def test_explicit_backend_url():
 def test_start_session_verify_after_dispatch():
     c = SessionsClient()
     payload = {"id": 1, "target_name": "M31", "started_at": "2026-01-01T00:00:00", "ended_at": None}
-    with patch.object(c.session, "post", return_value=_ok(payload)) as p, \
-         patch.object(c.session, "get", return_value=_ok(payload)) as g:
+    with (
+        patch.object(c.session, "post", return_value=_ok(payload)) as p,
+        patch.object(c.session, "get", return_value=_ok(payload)) as g,
+    ):
         result = c.start_session("M31", target_ra=0.7, target_dec=41.0)
     assert result == payload
     p.assert_called_once()
@@ -41,16 +44,24 @@ def test_start_session_verify_after_dispatch():
 
 def test_start_session_returns_none_on_post_failure():
     c = SessionsClient()
-    with patch.object(c.session, "post",
-                      side_effect=requests.exceptions.ConnectionError("refused")):
+    with patch.object(
+        c.session, "post", side_effect=requests.exceptions.ConnectionError("refused")
+    ):
         assert c.start_session("M31") is None
 
 
 def test_end_session_verify_ended_at_set():
     c = SessionsClient()
-    end_payload = {"id": 1, "target_name": "M31", "started_at": "x", "ended_at": "2026-01-01T01:00:00"}
-    with patch.object(c.session, "post", return_value=_ok(end_payload)), \
-         patch.object(c.session, "get", return_value=_ok(end_payload)):
+    end_payload = {
+        "id": 1,
+        "target_name": "M31",
+        "started_at": "x",
+        "ended_at": "2026-01-01T01:00:00",
+    }
+    with (
+        patch.object(c.session, "post", return_value=_ok(end_payload)),
+        patch.object(c.session, "get", return_value=_ok(end_payload)),
+    ):
         result = c.end_session(1)
     assert result is not None
 
@@ -58,16 +69,20 @@ def test_end_session_verify_ended_at_set():
 def test_end_session_returns_none_when_ended_at_missing():
     c = SessionsClient()
     end_payload = {"id": 1, "target_name": "M31", "started_at": "x", "ended_at": None}
-    with patch.object(c.session, "post", return_value=_ok(end_payload)), \
-         patch.object(c.session, "get", return_value=_ok(end_payload)):
+    with (
+        patch.object(c.session, "post", return_value=_ok(end_payload)),
+        patch.object(c.session, "get", return_value=_ok(end_payload)),
+    ):
         assert c.end_session(1) is None
 
 
 def test_add_frame_no_verify():
     c = SessionsClient()
     frame_payload = {"id": 1, "session_id": 1, "filename": "f.fits"}
-    with patch.object(c.session, "post", return_value=_ok(frame_payload)) as p, \
-         patch.object(c.session, "get") as g:
+    with (
+        patch.object(c.session, "post", return_value=_ok(frame_payload)) as p,
+        patch.object(c.session, "get") as g,
+    ):
         result = c.add_frame(1, "f.fits", 10.0, 80, "L")
     assert result == frame_payload
     p.assert_called_once()
@@ -76,8 +91,7 @@ def test_add_frame_no_verify():
 
 def test_add_frame_returns_none_on_failure():
     c = SessionsClient()
-    with patch.object(c.session, "post",
-                      side_effect=requests.exceptions.Timeout()):
+    with patch.object(c.session, "post", side_effect=requests.exceptions.Timeout()):
         assert c.add_frame(1, "f.fits", 10.0, 80, "L") is None
 
 
@@ -90,8 +104,7 @@ def test_list_sessions_returns_list():
 
 def test_list_sessions_returns_none_on_failure():
     c = SessionsClient()
-    with patch.object(c.session, "get",
-                      side_effect=requests.exceptions.ConnectionError()):
+    with patch.object(c.session, "get", side_effect=requests.exceptions.ConnectionError()):
         assert c.list_sessions() is None
 
 

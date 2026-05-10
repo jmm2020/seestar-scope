@@ -1,4 +1,5 @@
 """Imaging sequence builder - multi-target automated capture runs."""
+
 import json
 import time
 from pathlib import Path
@@ -28,7 +29,9 @@ def _init_sequence_state():
 def _render_add_target(stellarium):
     """Controls for adding targets to the sequence."""
     st.subheader("Add Target")
-    st.caption("Build a multi-target imaging plan. Each target gets its own exposure, gain, and filter settings.")
+    st.caption(
+        "Build a multi-target imaging plan. Each target gets its own exposure, gain, and filter settings."
+    )
 
     tab_manual, tab_catalog, tab_stellarium = st.tabs(
         ["Manual Entry", "Catalog Lookup", "From Stellarium"]
@@ -37,53 +40,94 @@ def _render_add_target(stellarium):
     with tab_manual:
         col_name, col_ra, col_dec = st.columns(3)
         with col_name:
-            name = st.text_input("Target Name", key="seq_manual_name",
-                                help="A descriptive name for the target (used in filenames).")
+            name = st.text_input(
+                "Target Name",
+                key="seq_manual_name",
+                help="A descriptive name for the target (used in filenames).",
+            )
         with col_ra:
-            ra = st.number_input("RA (hours)", min_value=0.0, max_value=24.0,
-                                 value=0.0, step=0.1, key="seq_manual_ra",
-                                 help="Right Ascension in decimal hours (0-24). "
-                                      "Example: M42 = 5.588h")
+            ra = st.number_input(
+                "RA (hours)",
+                min_value=0.0,
+                max_value=24.0,
+                value=0.0,
+                step=0.1,
+                key="seq_manual_ra",
+                help="Right Ascension in decimal hours (0-24). Example: M42 = 5.588h",
+            )
         with col_dec:
-            dec = st.number_input("Dec (degrees)", min_value=-90.0, max_value=90.0,
-                                  value=0.0, step=0.1, key="seq_manual_dec",
-                                  help="Declination in decimal degrees (-90 to +90). "
-                                       "Example: M42 = -5.39\u00b0")
+            dec = st.number_input(
+                "Dec (degrees)",
+                min_value=-90.0,
+                max_value=90.0,
+                value=0.0,
+                step=0.1,
+                key="seq_manual_dec",
+                help="Declination in decimal degrees (-90 to +90). Example: M42 = -5.39\u00b0",
+            )
 
         col_exp, col_gain, col_filt, col_frames = st.columns(4)
         with col_exp:
-            exposure = st.number_input("Exposure (s)", min_value=0.001,
-                                       max_value=2000.0, value=10.0, step=1.0,
-                                       key="seq_manual_exp",
-                                       help="Exposure time per frame in seconds.")
+            exposure = st.number_input(
+                "Exposure (s)",
+                min_value=0.001,
+                max_value=2000.0,
+                value=10.0,
+                step=1.0,
+                key="seq_manual_exp",
+                help="Exposure time per frame in seconds.",
+            )
         with col_gain:
-            gain = st.number_input("Gain", min_value=0, max_value=400,
-                                   value=80, step=10, key="seq_manual_gain",
-                                   help="Sensor gain for this target (0-400).")
+            gain = st.number_input(
+                "Gain",
+                min_value=0,
+                max_value=400,
+                value=80,
+                step=10,
+                key="seq_manual_gain",
+                help="Sensor gain for this target (0-400).",
+            )
         with col_filt:
-            filt = st.selectbox("Filter", FILTER_OPTIONS, key="seq_manual_filter",
-                                help="Dark = no filter, IR = infrared cut, LP = light pollution.")
+            filt = st.selectbox(
+                "Filter",
+                FILTER_OPTIONS,
+                key="seq_manual_filter",
+                help="Dark = no filter, IR = infrared cut, LP = light pollution.",
+            )
         with col_frames:
-            frames = st.number_input("Frames", min_value=1, max_value=999,
-                                     value=10, step=1, key="seq_manual_frames",
-                                     help="Number of exposures to capture for this target. "
-                                          "More frames = better signal when stacked.")
+            frames = st.number_input(
+                "Frames",
+                min_value=1,
+                max_value=999,
+                value=10,
+                step=1,
+                key="seq_manual_frames",
+                help="Number of exposures to capture for this target. "
+                "More frames = better signal when stacked.",
+            )
 
         if st.button("Add Manual Target", key="seq_add_manual"):
             if name:
-                st.session_state.sequence_targets.append({
-                    "name": name, "ra": ra, "dec": dec,
-                    "exposure": exposure, "gain": gain,
-                    "filter": filt, "filter_idx": FILTER_OPTIONS.index(filt),
-                    "frames": frames,
-                })
+                st.session_state.sequence_targets.append(
+                    {
+                        "name": name,
+                        "ra": ra,
+                        "dec": dec,
+                        "exposure": exposure,
+                        "gain": gain,
+                        "filter": filt,
+                        "filter_idx": FILTER_OPTIONS.index(filt),
+                        "frames": frames,
+                    }
+                )
                 st.rerun()
             else:
                 st.warning("Enter a target name")
 
     with tab_catalog:
-        query = st.text_input("Search Messier catalog", key="seq_catalog_query",
-                              placeholder="M42, Orion, Galaxy...")
+        query = st.text_input(
+            "Search Messier catalog", key="seq_catalog_query", placeholder="M42, Orion, Galaxy..."
+        )
         if query:
             # Try direct lookup first
             result = lookup_messier(query)
@@ -100,14 +144,18 @@ def _render_add_target(stellarium):
                         st.text(f"{label}  RA: {r['ra_hours']:.3f}h  Dec: {r['dec_degrees']:.2f}")
                     with col_add:
                         if st.button("Add", key=f"seq_cat_{r['id']}"):
-                            st.session_state.sequence_targets.append({
-                                "name": f"{r['id']} {r['common_name']}",
-                                "ra": r["ra_hours"],
-                                "dec": r["dec_degrees"],
-                                "exposure": 10.0, "gain": 80,
-                                "filter": "LP", "filter_idx": 2,
-                                "frames": 10,
-                            })
+                            st.session_state.sequence_targets.append(
+                                {
+                                    "name": f"{r['id']} {r['common_name']}",
+                                    "ra": r["ra_hours"],
+                                    "dec": r["dec_degrees"],
+                                    "exposure": 10.0,
+                                    "gain": 80,
+                                    "filter": "LP",
+                                    "filter_idx": 2,
+                                    "frames": 10,
+                                }
+                            )
                             st.rerun()
             else:
                 st.info("No matches found")
@@ -122,18 +170,24 @@ def _render_add_target(stellarium):
 
         obj = st.session_state.get("seq_stell_obj")
         if obj:
-            st.success(f"**{obj.name}** ({obj.object_type}) - "
-                       f"RA: {obj.ra_j2000_hours:.4f}h  Dec: {obj.dec_j2000_degrees:.4f}")
+            st.success(
+                f"**{obj.name}** ({obj.object_type}) - "
+                f"RA: {obj.ra_j2000_hours:.4f}h  Dec: {obj.dec_j2000_degrees:.4f}"
+            )
             if obj.above_horizon:
                 if st.button("Add to Sequence", key="seq_add_stellarium"):
-                    st.session_state.sequence_targets.append({
-                        "name": obj.name,
-                        "ra": obj.ra_j2000_hours,
-                        "dec": obj.dec_j2000_degrees,
-                        "exposure": 10.0, "gain": 80,
-                        "filter": "LP", "filter_idx": 2,
-                        "frames": 10,
-                    })
+                    st.session_state.sequence_targets.append(
+                        {
+                            "name": obj.name,
+                            "ra": obj.ra_j2000_hours,
+                            "dec": obj.dec_j2000_degrees,
+                            "exposure": 10.0,
+                            "gain": 80,
+                            "filter": "LP",
+                            "filter_idx": 2,
+                            "frames": 10,
+                        }
+                    )
                     st.session_state.pop("seq_stell_obj", None)
                     st.rerun()
             else:
@@ -153,7 +207,7 @@ def _render_sequence_list():
         with st.container():
             cols = st.columns([3, 1.5, 1.5, 1, 1, 1, 1, 0.5])
             with cols[0]:
-                st.text(f"{i+1}. {t['name']}")
+                st.text(f"{i + 1}. {t['name']}")
             with cols[1]:
                 st.text(f"RA: {t['ra']:.3f}h")
             with cols[2]:
@@ -167,15 +221,16 @@ def _render_sequence_list():
             with cols[6]:
                 st.text(f"x{t['frames']}")
             with cols[7]:
-                if st.button("X", key=f"seq_rm_{i}",
-                             disabled=st.session_state.sequence_running):
+                if st.button("X", key=f"seq_rm_{i}", disabled=st.session_state.sequence_running):
                     st.session_state.sequence_targets.pop(i)
                     st.rerun()
 
     total_frames = sum(t["frames"] for t in targets)
     total_time = sum(t["frames"] * t["exposure"] for t in targets)
-    st.caption(f"**{len(targets)} targets** | {total_frames} total frames | "
-               f"~{total_time:.0f}s exposure time (excluding slew/readout)")
+    st.caption(
+        f"**{len(targets)} targets** | {total_frames} total frames | "
+        f"~{total_time:.0f}s exposure time (excluding slew/readout)"
+    )
 
 
 def _render_run_controls(alpaca):
@@ -189,39 +244,55 @@ def _render_run_controls(alpaca):
     col_run, col_stop, col_save, col_load = st.columns(4)
 
     with col_run:
-        if st.button("Run Sequence", type="primary", use_container_width=True,
-                      key="seq_run",
-                      disabled=st.session_state.sequence_running or not targets,
-                      help="Start executing all targets in order: slew, configure, "
-                           "capture frames, then advance to the next target."):
+        if st.button(
+            "Run Sequence",
+            type="primary",
+            use_container_width=True,
+            key="seq_run",
+            disabled=st.session_state.sequence_running or not targets,
+            help="Start executing all targets in order: slew, configure, "
+            "capture frames, then advance to the next target.",
+        ):
             st.session_state.sequence_running = True
             st.session_state.sequence_current_idx = 0
             st.session_state.sequence_current_frame = 0
             st.rerun()
 
     with col_stop:
-        if st.button("Stop", use_container_width=True, key="seq_stop",
-                      disabled=not st.session_state.sequence_running,
-                      help="Abort the running sequence and stop the current exposure."):
+        if st.button(
+            "Stop",
+            use_container_width=True,
+            key="seq_stop",
+            disabled=not st.session_state.sequence_running,
+            help="Abort the running sequence and stop the current exposure.",
+        ):
             st.session_state.sequence_running = False
             alpaca.abort_exposure()
             sid = st.session_state.get("seq_session_id")
             if sid is not None:
                 from clients.sessions_client import SessionsClient
+
                 _sc = SessionsClient()
                 _sc.end_session(sid)
                 st.session_state["seq_session_id"] = None
             st.warning("Sequence stopped")
 
     with col_save:
-        if st.button("Save Sequence", use_container_width=True, key="seq_save",
-                      help="Save the current target list to a JSON file "
-                           "for reuse in future sessions."):
+        if st.button(
+            "Save Sequence",
+            use_container_width=True,
+            key="seq_save",
+            help="Save the current target list to a JSON file for reuse in future sessions.",
+        ):
             _save_sequence(targets)
 
     with col_load:
-        if st.button("Load Sequence", use_container_width=True, key="seq_load",
-                      help="Load a previously saved sequence from disk."):
+        if st.button(
+            "Load Sequence",
+            use_container_width=True,
+            key="seq_load",
+            help="Load a previously saved sequence from disk.",
+        ):
             st.session_state["show_load_dialog"] = True
 
     # Load file picker
@@ -245,6 +316,7 @@ def _execute_sequence_step(alpaca):
         sid = st.session_state.get("seq_session_id")
         if sid is not None:
             from clients.sessions_client import SessionsClient
+
             _sc = SessionsClient()
             _sc.end_session(sid)
             st.session_state["seq_session_id"] = None
@@ -257,9 +329,11 @@ def _execute_sequence_step(alpaca):
     # Progress display
     total_frames = sum(t["frames"] for t in targets)
     completed_frames = sum(t["frames"] for t in targets[:idx]) + frame
-    st.progress(completed_frames / max(total_frames, 1),
-                text=f"Target {idx+1}/{len(targets)}: {target['name']} - "
-                     f"Frame {frame+1}/{target['frames']}")
+    st.progress(
+        completed_frames / max(total_frames, 1),
+        text=f"Target {idx + 1}/{len(targets)}: {target['name']} - "
+        f"Frame {frame + 1}/{target['frames']}",
+    )
 
     # State machine for current target
     step = st.session_state.get("seq_step", "slew")
@@ -271,6 +345,7 @@ def _execute_sequence_step(alpaca):
             # Start session on first target of sequence
             if idx == 0 and frame == 0 and st.session_state.get("seq_session_id") is None:
                 from clients.sessions_client import SessionsClient
+
                 _sc = SessionsClient()
                 session = _sc.start_session(
                     target_name=target["name"],
@@ -305,8 +380,7 @@ def _execute_sequence_step(alpaca):
         st.rerun()
 
     elif step == "expose":
-        st.info(f"Exposing frame {frame+1}/{target['frames']} - "
-                f"{target['exposure']}s")
+        st.info(f"Exposing frame {frame + 1}/{target['frames']} - {target['exposure']}s")
         resp = alpaca.start_exposure(target["exposure"], light=True)
         if resp.success:
             st.session_state["seq_step"] = "wait_expose"
@@ -322,10 +396,11 @@ def _execute_sequence_step(alpaca):
             sid = st.session_state.get("seq_session_id")
             if sid is not None:
                 from clients.sessions_client import SessionsClient
+
                 _sc = SessionsClient()
                 _sc.add_frame(
                     session_id=sid,
-                    filename=f"sequence_{target['name']}_frame{frame+1}",
+                    filename=f"sequence_{target['name']}_frame{frame + 1}",
                     exposure_s=target["exposure"],
                     gain=target["gain"],
                     filter_name=target["filter"],
@@ -342,8 +417,7 @@ def _execute_sequence_step(alpaca):
             st.rerun()
         else:
             cam = alpaca.get_camera_status()
-            st.info(f"Camera: {cam.get('state', 'working')} - "
-                    f"frame {frame+1}/{target['frames']}")
+            st.info(f"Camera: {cam.get('state', 'working')} - frame {frame + 1}/{target['frames']}")
             time.sleep(2)
             st.rerun()
 
@@ -353,6 +427,7 @@ def _save_sequence(targets):
     path = Path("sessions")
     path.mkdir(parents=True, exist_ok=True)
     from datetime import datetime
+
     filename = path / f"sequence_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(filename, "w") as f:
         json.dump(targets, f, indent=2)
@@ -369,9 +444,7 @@ def _render_load_dialog():
         st.session_state["show_load_dialog"] = False
         return
 
-    selected = st.selectbox("Select sequence file",
-                            [f.name for f in files],
-                            key="seq_load_file")
+    selected = st.selectbox("Select sequence file", [f.name for f in files], key="seq_load_file")
     if st.button("Load Selected", key="seq_do_load"):
         filepath = path / selected
         with open(filepath) as f:

@@ -24,8 +24,10 @@ logger = logging.getLogger(__name__)
 # Pydantic Models (for API interaction)
 # ============================================================================
 
+
 class SessionRecord(BaseModel):
     """A single observation session — one target-night."""
+
     id: Optional[int] = Field(None, description="Auto-increment primary key")
     target_name: str = Field(..., description="Target object name (e.g., M31)")
     target_ra: Optional[float] = Field(None, description="Right ascension in hours")
@@ -33,12 +35,15 @@ class SessionRecord(BaseModel):
     started_at: datetime = Field(..., description="Session start time (UTC)")
     ended_at: Optional[datetime] = Field(None, description="Session end time (UTC)")
     site_location: Optional[Dict[str, Any]] = Field(None, description="{lat, lon, elevation}")
-    conditions_snapshot: Optional[Dict[str, Any]] = Field(None, description="{seeing, transparency, temp}")
+    conditions_snapshot: Optional[Dict[str, Any]] = Field(
+        None, description="{seeing, transparency, temp}"
+    )
     created_at: Optional[datetime] = Field(None, description="DB row creation time")
 
 
 class FrameRecord(BaseModel):
     """A single captured frame, linked to a session."""
+
     id: Optional[int] = Field(None, description="Auto-increment primary key")
     session_id: int = Field(..., description="Parent session ID")
     filename: str = Field(..., description="Path or basename of captured frame")
@@ -51,16 +56,20 @@ class FrameRecord(BaseModel):
 
 class StackRecord(BaseModel):
     """A stacked output, linked to a session."""
+
     id: Optional[int] = Field(None, description="Auto-increment primary key")
     session_id: int = Field(..., description="Parent session ID")
     output_path: str = Field(..., description="Path to the stacked output image")
     frame_count: int = Field(..., description="Number of frames stacked")
     algorithm: str = Field(..., description="Stacking algorithm used (e.g., 'mean', 'siril')")
-    applied_calibration_ids: Optional[List[int]] = Field(None, description="Calibration frame IDs used")
+    applied_calibration_ids: Optional[List[int]] = Field(
+        None, description="Calibration frame IDs used"
+    )
 
 
 class SessionFilter(BaseModel):
     """Filter criteria for session queries."""
+
     target: Optional[str] = Field(None, description="Target name (partial match)")
     start_date: Optional[datetime] = Field(None, description="Start of date range")
     end_date: Optional[datetime] = Field(None, description="End of date range")
@@ -70,6 +79,7 @@ class SessionFilter(BaseModel):
 
 class SessionStats(BaseModel):
     """Summary statistics across all sessions."""
+
     total_sessions: int
     total_frames: int
     total_exposure_hours: float
@@ -78,20 +88,27 @@ class SessionStats(BaseModel):
 
 class StartSessionRequest(BaseModel):
     """POST body for starting a new session."""
+
     target_name: str = Field(..., description="Target object name")
     target_ra: Optional[float] = Field(None, description="RA in hours")
     target_dec: Optional[float] = Field(None, description="Dec in degrees")
     site_location: Optional[Dict[str, Any]] = Field(None, description="{lat, lon, elevation}")
-    conditions_snapshot: Optional[Dict[str, Any]] = Field(None, description="{seeing, transparency, temp}")
+    conditions_snapshot: Optional[Dict[str, Any]] = Field(
+        None, description="{seeing, transparency, temp}"
+    )
 
 
 class EndSessionRequest(BaseModel):
     """POST body for ending an active session."""
-    conditions_snapshot: Optional[Dict[str, Any]] = Field(None, description="Final conditions snapshot")
+
+    conditions_snapshot: Optional[Dict[str, Any]] = Field(
+        None, description="Final conditions snapshot"
+    )
 
 
 class AddFrameRequest(BaseModel):
     """POST body for logging a captured frame."""
+
     filename: str = Field(..., description="Frame filename or path")
     exposure_s: float = Field(..., description="Exposure time in seconds")
     gain: int = Field(..., description="Sensor gain")
@@ -102,6 +119,7 @@ class AddFrameRequest(BaseModel):
 
 class AddStackRequest(BaseModel):
     """POST body for logging a stack output."""
+
     output_path: str = Field(..., description="Path to the stacked image file")
     frame_count: int = Field(..., description="Number of frames stacked")
     algorithm: str = Field(default="mean", description="Stacking algorithm used")
@@ -111,6 +129,7 @@ class AddStackRequest(BaseModel):
 # ============================================================================
 # SQLite Schema and Database Interface
 # ============================================================================
+
 
 class SessionDatabase:
     """SQLite database for observation sessions, frames, and stacks."""
@@ -175,7 +194,9 @@ class SessionDatabase:
             started_at=datetime.fromisoformat(row["started_at"]),
             ended_at=datetime.fromisoformat(row["ended_at"]) if row["ended_at"] else None,
             site_location=json.loads(row["site_location"]) if row["site_location"] else None,
-            conditions_snapshot=json.loads(row["conditions_snapshot"]) if row["conditions_snapshot"] else None,
+            conditions_snapshot=json.loads(row["conditions_snapshot"])
+            if row["conditions_snapshot"]
+            else None,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
         )
 
@@ -198,7 +219,9 @@ class SessionDatabase:
             output_path=row["output_path"],
             frame_count=row["frame_count"],
             algorithm=row["algorithm"],
-            applied_calibration_ids=json.loads(row["applied_calibration_ids"]) if row["applied_calibration_ids"] else None,
+            applied_calibration_ids=json.loads(row["applied_calibration_ids"])
+            if row["applied_calibration_ids"]
+            else None,
         )
 
     def create_session(
