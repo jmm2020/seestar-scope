@@ -414,19 +414,17 @@ class StackingService:
             lines.append("# Calibration (dark/flat/bias)")
             lines.append(" ".join(cal_args))
             lines.append("")
-            register_input = "pp_light"
         else:
             lines.append("# Debayer for color sensor (Bayer RGGB) — no calibration provided")
             lines.append("preprocess light -debayer")
             lines.append("")
-            register_input = "pp_light"
 
         lines.extend([
             "# Register frames (star alignment)",
-            f"register {register_input} -drizzle",
+            "register pp_light -drizzle",
             "",
             "# Stack with sigma-clipping rejection",
-            f"stack r_{register_input} rej {sigma_low} {sigma_high} -norm=addscale -out=stacked",
+            f"stack r_pp_light rej {sigma_low} {sigma_high} -norm=addscale -out=stacked",
             "",
             "# AutoStretch for visibility",
             "load stacked",

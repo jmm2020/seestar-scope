@@ -8,6 +8,7 @@ service is lazily instantiated on first request, and the long-running
 run_stacking() pipeline is dispatched via FastAPI BackgroundTasks.
 """
 
+import dataclasses
 import logging
 from typing import List, Optional
 
@@ -85,16 +86,7 @@ class StackingStatusResponse(BaseModel):
 
 
 def _result_to_response(result: StackingResult) -> StackingResultResponse:
-    return StackingResultResponse(
-        success=result.success,
-        session_id=result.session_id,
-        frame_count=result.frame_count,
-        output_fits=result.output_fits,
-        output_jpeg=result.output_jpeg,
-        error_message=result.error_message,
-        duration_seconds=result.duration_seconds,
-        siril_output=result.siril_output,
-    )
+    return StackingResultResponse(**dataclasses.asdict(result))
 
 
 @router.post("/start", response_model=dict)
@@ -113,19 +105,7 @@ async def start_stacking(
     if service.is_running:
         raise HTTPException(status_code=409, detail="Stacking already running")
 
-    if config is not None:
-        service_config = StackingConfig(
-            target_name=config.target_name,
-            exposure_time=config.exposure_time,
-            gain=config.gain,
-            dark_path=config.dark_path,
-            flat_path=config.flat_path,
-            bias_path=config.bias_path,
-            sigma_low=config.sigma_low,
-            sigma_high=config.sigma_high,
-        )
-    else:
-        service_config = None
+    service_config = StackingConfig(**config.model_dump()) if config is not None else None
 
     session_id = service.start_session(service_config)
 
@@ -228,14 +208,4 @@ async def abort_stacking(request: Request):
 @router.get("/config", response_model=StackingConfigRequest)
 async def get_default_config():
     """Return default stacking configuration."""
-    cfg = StackingConfig()
-    return StackingConfigRequest(
-        target_name=cfg.target_name,
-        exposure_time=cfg.exposure_time,
-        gain=cfg.gain,
-        dark_path=cfg.dark_path,
-        flat_path=cfg.flat_path,
-        bias_path=cfg.bias_path,
-        sigma_low=cfg.sigma_low,
-        sigma_high=cfg.sigma_high,
-    )
+    return StackingConfigRequest()

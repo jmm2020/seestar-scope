@@ -268,6 +268,7 @@ def render_session_controls(is_running: bool, status: Dict[str, Any]) -> None:
 
 def render_status_display(status: Dict[str, Any]) -> None:
     """Render running indicator, frame count, progress."""
+    progress_value = max(0.0, min(1.0, float(status.get("progress", 0.0) or 0.0)))
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -278,10 +279,8 @@ def render_status_display(status: Dict[str, Any]) -> None:
         st.metric("Frame Count", status.get("frame_count", 0))
 
     with col3:
-        progress_value = float(status.get("progress", 0.0) or 0.0)
         st.metric("Progress", f"{int(progress_value * 100)}%")
 
-    progress_value = max(0.0, min(1.0, float(status.get("progress", 0.0) or 0.0)))
     st.progress(progress_value)
 
     session_id = status.get("session_id")
