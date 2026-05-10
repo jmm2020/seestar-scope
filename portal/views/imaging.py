@@ -22,7 +22,11 @@ MODE_LABELS = {
     "planet": "Planetary",
 }
 
-BACKEND_PORT = 8503  # FastAPI backend WebSocket/REST port
+try:
+    from backend.config import settings as _backend_settings
+    BACKEND_PORT = _backend_settings.port  # sourced from config.py / .env
+except Exception:
+    BACKEND_PORT = 8503
 
 
 # --- Live View ---
@@ -183,8 +187,10 @@ def _render_live_stack_panel():
         }}
 
         function updateUI(data) {{
+            var framesEl = document.getElementById('lsp-frames');
+            if (!framesEl) return;  // DOM not ready / Streamlit rerender
             var fc = data.frame_count || 0;
-            document.getElementById('lsp-frames').textContent = fc;
+            framesEl.textContent = fc;
             document.getElementById('lsp-snr').textContent =
                 data.snr_estimate ? data.snr_estimate.toFixed(1) + 'x' : '1.0x';
             document.getElementById('lsp-elapsed').textContent =
@@ -212,15 +218,19 @@ def _render_live_stack_panel():
                     if (msg.type === 'stack_progress' && msg.data) {{
                         updateUI(msg.data);
                     }}
-                }} catch(_) {{}}
+                }} catch(err) {{
+                    console.error('[lsp] onmessage error:', err);
+                }}
+            }};
+            var hadError = false;
+            ws.onerror = function() {{
+                hadError = true;
             }};
             ws.onclose = function() {{
-                setStatus('Reconnecting…', '#d29922');
+                setStatus(hadError ? 'Stream error — reconnecting…' : 'Reconnecting…', '#d29922');
+                hadError = false;
                 setTimeout(connect, Math.min(retryDelay, 30000));
                 retryDelay = Math.min(retryDelay * 2, 30000);
-            }};
-            ws.onerror = function() {{
-                setStatus('Stream error', '#f85149');
             }};
         }}
 
@@ -228,7 +238,7 @@ def _render_live_stack_panel():
         fetch(restUrl)
             .then(function(r) {{ return r.json(); }})
             .then(function(d) {{ if (d.state && d.state.frame_count) updateUI(d.state); }})
-            .catch(function() {{}});
+            .catch(function(err) {{ console.warn('[lsp] pre-fetch failed:', err); }});
 
         connect();
     }})();
@@ -323,9 +333,14 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
                 help="Discard current sub-stack and restart fresh from zero.",
             ):
                 with st.spinner("Restarting stack…"):
-                    stop_resp = alpaca.stop_stack()
-                    time.sleep(1)
-                    start_resp = alpaca.start_stack(restart=True, gain=gain)
+                    try:
+                        stop_resp = alpaca.stop_stack()
+                        time.sleep(1)
+                        start_resp = alpaca.start_stack(restart=True, gain=gain)
+                    except Exception as exc:
+                        st.error(f"Reject & Restart failed: {exc}")
+                        st.rerun()
+                        st.stop()
                 if stop_resp.success and start_resp.success:
                     st.success("Stack restarted — accumulating fresh frames from this point.")
                 else:

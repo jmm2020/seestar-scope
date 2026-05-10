@@ -230,7 +230,10 @@ async def stack_progress_broadcaster(request: Request) -> None:
                 stage = view.get("stage", "")
                 is_stacking = stage == "Stack"
                 stack_data = view.get("Stack", {})
-                frame_count = int(stack_data.get("count", 0))
+                try:
+                    frame_count = int(float(stack_data.get("count", 0) or 0))
+                except (ValueError, TypeError):
+                    frame_count = last_frame_count if last_frame_count >= 0 else 0
                 lapse_ms = view.get("lapse_ms", 0)
 
                 state = {
@@ -241,6 +244,7 @@ async def stack_progress_broadcaster(request: Request) -> None:
                     "stage": stage,
                     "mode": view.get("mode", "unknown"),
                     "target": view.get("target_name", ""),
+                    "captured_at": datetime.now(timezone.utc).isoformat(),
                 }
 
                 # Persist for reconnect recovery
@@ -260,6 +264,13 @@ async def stack_progress_broadcaster(request: Request) -> None:
 
         except Exception as e:
             logger.error(f"Stack progress broadcast error: {e}")
+            await manager.broadcast(
+                {
+                    "type": MessageType.ERROR,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "error": f"Stack progress unavailable: {e}",
+                }
+            )
 
         await asyncio.sleep(3.0)
 
@@ -269,18 +280,19 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
     """
     WebSocket endpoint for real-time status updates.
 
-    **Connection URL:** ws://192.168.0.148:8503/api/status/ws
+    **Connection URL:** ws://<host>:8503/api/status/ws
 
     **Message Types:**
     - `telescope_status`: Real-time telescope position, tracking, slewing state (every 2s)
     - `processing_status`: Processing job status updates (pushed on state change)
+    - `stack_progress`: Live stack frame count, elapsed time, SNR estimate (every 3s, on change only)
     - `heartbeat`: Connection health check (every 30s)
     - `error`: Error notifications
     - `connected`: Welcome message on connection
 
     **Client Example (JavaScript):**
     ```javascript
-    const ws = new WebSocket('ws://192.168.0.148:8503/api/status/ws');
+    const ws = new WebSocket('ws://<host>:8503/api/status/ws');
 
     ws.onopen = () => {
         console.log('Connected to Seestar status stream');
@@ -297,6 +309,10 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
             case 'processing_status':
                 console.log('Processing:', msg.data.status);
                 updateProcessingUI(msg.data);
+                break;
+            case 'stack_progress':
+                console.log('Stack:', msg.data.frame_count, 'frames');
+                updateStackUI(msg.data);
                 break;
             case 'heartbeat':
                 console.log('Heartbeat:', msg.timestamp);
@@ -336,7 +352,7 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
         print("Connected to Seestar status stream")
 
     ws = websocket.WebSocketApp(
-        "ws://192.168.0.148:8503/api/status/ws",
+        "ws://<host>:8503/api/status/ws",
         on_open=on_open,
         on_message=on_message,
         on_error=on_error,
