@@ -12,7 +12,7 @@ import logging
 import shutil
 import sys
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -50,7 +50,7 @@ class PostprocessingResult:
     stats: Optional[Dict[str, Any]] = None
     duration_seconds: float = 0.0
     job_id: Optional[str] = None
-    completed_at: Optional[datetime] = field(default=None)
+    completed_at: Optional[datetime] = None
 
 
 class PostprocessingService:

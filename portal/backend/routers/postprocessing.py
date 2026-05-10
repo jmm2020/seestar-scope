@@ -123,23 +123,6 @@ class CalibrationInfoResponse(BaseModel):
 # --------------------------------------------------------------------------
 
 
-def _request_to_params(req: PostprocessingRequest) -> Dict[str, Any]:
-    return {
-        "stretch": req.stretch,
-        "stretch_params": req.stretch_params,
-        "background_sub": req.background_sub,
-        "hot_pixel": req.hot_pixel,
-        "hot_pixel_method": req.hot_pixel_method,
-        "denoise": req.denoise,
-        "denoise_strength": req.denoise_strength,
-        "sharpen": req.sharpen,
-        "sharpen_amount": req.sharpen_amount,
-        "sharpen_radius": req.sharpen_radius,
-        "color_balance": req.color_balance,
-        "apply_calibration": req.apply_calibration,
-    }
-
-
 async def _run_pipeline_task(job_id: str, image_path: str, params: Dict[str, Any]) -> None:
     """Background runner. Stores PostprocessingResult in processing_jobs."""
     service = get_service()
@@ -208,7 +191,7 @@ async def apply_postprocessing(
         )
 
     job_id = f"pp_{uuid.uuid4().hex[:8]}"
-    params = _request_to_params(req)
+    params = req.model_dump(exclude={"image_path"})
     processing_jobs[job_id] = PostprocessingResult(
         success=False,
         error_message=None,
