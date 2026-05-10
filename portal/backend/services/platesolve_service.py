@@ -99,7 +99,6 @@ class ASTAPService:
         self.astap_bin = astap_bin
         self.data_root = Path(data_root)
         self.platesolve_dir = self.data_root / "platesolve"
-        self.platesolve_dir.mkdir(parents=True, exist_ok=True)
         self.timeout_sec = timeout_sec
 
         # In-memory session storage (production would use Redis/database)
@@ -143,6 +142,7 @@ class ASTAPService:
         # Execute solve
         result.status = SolveStatus.RUNNING
         start_time = datetime.utcnow()
+        self.platesolve_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             solution = await self._execute_astap(cmd, image_path)
@@ -217,6 +217,7 @@ class ASTAPService:
         # Execute solve
         result.status = SolveStatus.RUNNING
         start_time = datetime.utcnow()
+        self.platesolve_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             solution = await self._execute_astap(cmd, image_path)
