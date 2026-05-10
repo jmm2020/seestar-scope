@@ -40,6 +40,7 @@ def get_conditions_service(request: Request) -> ConditionsService:
 # Pydantic Models for API
 # ============================================================================
 
+
 class WeatherResponse(BaseModel):
     cloud_cover_pct: Optional[int]
     wind_speed_ms: Optional[float]
@@ -95,6 +96,7 @@ def _to_response(data) -> ConditionsResponse:
 # ============================================================================
 # Endpoints
 # ============================================================================
+
 
 @router.get("/current", response_model=ConditionsResponse)
 async def get_current_conditions(request: Request):

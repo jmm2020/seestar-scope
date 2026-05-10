@@ -15,12 +15,7 @@ import logging
 
 from PIL import Image
 
-from ..models.gallery import (
-    GalleryDatabase,
-    GalleryFilter,
-    ImageRecord,
-    GalleryStats
-)
+from ..models.gallery import GalleryDatabase, GalleryFilter, ImageRecord, GalleryStats
 from ..database import get_db
 
 logger = logging.getLogger(__name__)
@@ -41,11 +36,11 @@ async def list_images(
     stacked_only: bool = Query(False, description="Only show stacked images"),
     limit: int = Query(50, ge=1, le=500, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    db: GalleryDatabase = Depends(get_db)
+    db: GalleryDatabase = Depends(get_db),
 ):
     """
     List images with flexible filtering.
-    
+
     Examples:
     - GET /api/gallery/?target=M31&limit=10
     - GET /api/gallery/?session_id=20260302_143052
@@ -64,13 +59,13 @@ async def list_images(
             processed_only=processed_only,
             stacked_only=stacked_only,
             limit=limit,
-            offset=offset
+            offset=offset,
         )
-        
+
         records = db.search(filter_criteria)
         logger.info(f"Gallery query returned {len(records)} images")
         return records
-        
+
     except Exception as e:
         logger.error(f"Gallery search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -80,7 +75,7 @@ async def list_images(
 async def get_gallery_stats(db: GalleryDatabase = Depends(get_db)):
     """
     Get gallery statistics summary.
-    
+
     Returns:
     - Total images/sessions
     - Target/filter breakdown
@@ -92,7 +87,7 @@ async def get_gallery_stats(db: GalleryDatabase = Depends(get_db)):
         stats = db.get_stats()
         logger.info(f"Gallery stats: {stats.total_images} images, {stats.total_sessions} sessions")
         return stats
-        
+
     except Exception as e:
         logger.error(f"Failed to get gallery stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -102,7 +97,7 @@ async def get_gallery_stats(db: GalleryDatabase = Depends(get_db)):
 async def get_image_detail(image_id: int, db: GalleryDatabase = Depends(get_db)):
     """
     Get full details for a specific image.
-    
+
     Returns ImageRecord with all metadata, tags, notes, processing status.
     """
     try:
@@ -120,9 +115,7 @@ async def get_image_detail(image_id: int, db: GalleryDatabase = Depends(get_db))
 
 @router.get("/{image_id}/thumbnail")
 async def get_thumbnail(
-    image_id: int,
-    size: int = Query(256, ge=64, le=1024),
-    db: GalleryDatabase = Depends(get_db)
+    image_id: int, size: int = Query(256, ge=64, le=1024), db: GalleryDatabase = Depends(get_db)
 ):
     """
     Serve thumbnail for an image.
@@ -161,20 +154,16 @@ async def get_thumbnail(
 
 
 @router.post("/{image_id}/tags")
-async def add_tags(
-    image_id: int,
-    tags: List[str],
-    db: GalleryDatabase = Depends(get_db)
-):
+async def add_tags(image_id: int, tags: List[str], db: GalleryDatabase = Depends(get_db)):
     """
     Add tags to an image (merges with existing tags).
-    
+
     Request body: ["nebula", "narrowband", "featured"]
     """
     try:
         db.add_tags(image_id, tags)
         return {"status": "success", "image_id": image_id, "tags": tags}
-        
+
     except Exception as e:
         logger.error(f"Failed to add tags to image {image_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

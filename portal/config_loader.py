@@ -1,4 +1,5 @@
 """TOML configuration loader for SeestarScope."""
+
 import os
 import toml
 from pathlib import Path

@@ -4,6 +4,7 @@ Iframes stellarium-web.org so the user can browse the sky, search objects,
 and pick targets in a familiar interface. No portal↔Stellarium wiring;
 the user just reads off the object name and types it into GoTo.
 """
+
 import streamlit as st
 
 

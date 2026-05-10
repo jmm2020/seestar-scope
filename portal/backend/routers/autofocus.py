@@ -10,10 +10,7 @@ from typing import Optional, List
 from datetime import datetime
 import logging
 
-from ..services.autofocus_service import (
-    AutoFocusService,
-    AutoFocusConfig
-)
+from ..services.autofocus_service import AutoFocusService, AutoFocusConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +23,12 @@ _autofocus_service: Optional[AutoFocusService] = None
 def get_autofocus_service(request: Request) -> AutoFocusService:
     """Get autofocus service instance from app state."""
     global _autofocus_service
-    
+
     if _autofocus_service is None:
         # Initialize on first use
         alpaca = request.app.state.alpaca
         _autofocus_service = AutoFocusService(alpaca)
-    
+
     return _autofocus_service
 
 
@@ -39,19 +36,24 @@ def get_autofocus_service(request: Request) -> AutoFocusService:
 # Pydantic Models for API
 # ============================================================================
 
+
 class AutoFocusConfigRequest(BaseModel):
     """Configuration for autofocus routine."""
+
     exposure_time: float = Field(2.0, ge=0.1, le=10.0, description="Exposure time in seconds")
     gain: int = Field(100, ge=0, le=400, description="Sensor gain")
     step_size: int = Field(200, ge=50, le=500, description="Focuser steps between measurements")
     num_steps: int = Field(11, ge=5, le=21, description="Number of positions (must be odd)")
-    detection_threshold: float = Field(3.0, ge=1.0, le=10.0, description="Sigma threshold for star detection")
+    detection_threshold: float = Field(
+        3.0, ge=1.0, le=10.0, description="Sigma threshold for star detection"
+    )
     min_stars: int = Field(5, ge=3, le=20, description="Minimum stars required")
     max_stars: int = Field(50, ge=10, le=200, description="Maximum stars to measure")
 
 
 class FocusPositionResponse(BaseModel):
     """Single focus measurement result."""
+
     position: int
     hfr: float
     num_stars: int
@@ -60,6 +62,7 @@ class FocusPositionResponse(BaseModel):
 
 class AutoFocusResultResponse(BaseModel):
     """Complete autofocus result."""
+
     success: bool
     optimal_position: Optional[int]
     initial_position: int
@@ -72,6 +75,7 @@ class AutoFocusResultResponse(BaseModel):
 
 class AutoFocusStatusResponse(BaseModel):
     """Current autofocus status."""
+
     running: bool
     latest_result: Optional[AutoFocusResultResponse]
 
@@ -80,11 +84,12 @@ class AutoFocusStatusResponse(BaseModel):
 # API Endpoints
 # ============================================================================
 
+
 @router.post("/start", response_model=dict)
 async def start_autofocus(
     config: Optional[AutoFocusConfigRequest] = None,
     background_tasks: BackgroundTasks = None,
-    request: Request = None
+    request: Request = None,
 ):
     """
     Start V-curve autofocus routine.
@@ -113,10 +118,10 @@ async def start_autofocus(
     """
     try:
         service = get_autofocus_service(request)
-        
+
         if service.is_running:
             raise HTTPException(status_code=409, detail="Autofocus already running")
-        
+
         # Convert Pydantic model to service config
         if config:
             service_config = AutoFocusConfig(
@@ -126,11 +131,11 @@ async def start_autofocus(
                 num_steps=config.num_steps,
                 detection_threshold=config.detection_threshold,
                 min_stars=config.min_stars,
-                max_stars=config.max_stars
+                max_stars=config.max_stars,
             )
         else:
             service_config = None
-        
+
         # Run autofocus in background
         async def run_autofocus_task():
             logger.info("Starting autofocus routine")
@@ -139,15 +144,15 @@ async def start_autofocus(
                 logger.info(f"Autofocus complete: optimal={result.optimal_position}, HFR improved")
             else:
                 logger.error(f"Autofocus failed: {result.error_message}")
-        
+
         background_tasks.add_task(run_autofocus_task)
-        
+
         return {
             "status": "started",
             "message": "Autofocus routine started in background",
-            "config": config.dict() if config else AutoFocusConfig().__dict__
+            "config": config.dict() if config else AutoFocusConfig().__dict__,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -159,16 +164,16 @@ async def start_autofocus(
 async def get_autofocus_status(request: Request):
     """
     Get current autofocus status and latest result.
-    
+
     **Returns:**
     - `running`: Whether autofocus is currently active
     - `latest_result`: Most recent autofocus result (if available)
-    
+
     **Example:**
     ```bash
     curl http://localhost:8503/api/autofocus/status
     ```
-    
+
     **Response:**
     ```json
     {
@@ -188,7 +193,7 @@ async def get_autofocus_status(request: Request):
     """
     try:
         service = get_autofocus_service(request)
-        
+
         result_response = None
         if service.current_result:
             result = service.current_result
@@ -199,23 +204,17 @@ async def get_autofocus_status(request: Request):
                 final_position=result.final_position,
                 measurements=[
                     FocusPositionResponse(
-                        position=m.position,
-                        hfr=m.hfr,
-                        num_stars=m.num_stars,
-                        timestamp=m.timestamp
+                        position=m.position, hfr=m.hfr, num_stars=m.num_stars, timestamp=m.timestamp
                     )
                     for m in result.measurements
                 ],
                 v_curve_fit=result.v_curve_fit,
                 error_message=result.error_message,
-                duration_seconds=result.duration_seconds
+                duration_seconds=result.duration_seconds,
             )
-        
-        return AutoFocusStatusResponse(
-            running=service.is_running,
-            latest_result=result_response
-        )
-        
+
+        return AutoFocusStatusResponse(running=service.is_running, latest_result=result_response)
+
     except Exception as e:
         logger.error(f"Failed to get autofocus status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -225,14 +224,14 @@ async def get_autofocus_status(request: Request):
 async def abort_autofocus(request: Request):
     """
     Abort running autofocus routine.
-    
+
     **Note:** Current implementation completes the active measurement before aborting.
     A future enhancement could add immediate cancellation.
-    
+
     **Returns:**
     - 200: Abort signal sent
     - 404: No autofocus running
-    
+
     **Example:**
     ```bash
     curl -X POST http://localhost:8503/api/autofocus/abort
@@ -240,18 +239,18 @@ async def abort_autofocus(request: Request):
     """
     try:
         service = get_autofocus_service(request)
-        
+
         if not service.is_running:
             raise HTTPException(status_code=404, detail="No autofocus routine running")
-        
+
         # TODO: Implement graceful abort mechanism
         # For now, the routine will complete the current measurement
-        
+
         return {
             "status": "abort_requested",
-            "message": "Autofocus will abort after current measurement completes"
+            "message": "Autofocus will abort after current measurement completes",
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -263,9 +262,9 @@ async def abort_autofocus(request: Request):
 async def get_default_config():
     """
     Get default autofocus configuration.
-    
+
     Useful for understanding parameter ranges and defaults before starting a run.
-    
+
     **Example:**
     ```bash
     curl http://localhost:8503/api/autofocus/config
@@ -279,5 +278,5 @@ async def get_default_config():
         num_steps=default_config.num_steps,
         detection_threshold=default_config.detection_threshold,
         min_stars=default_config.min_stars,
-        max_stars=default_config.max_stars
+        max_stars=default_config.max_stars,
     )

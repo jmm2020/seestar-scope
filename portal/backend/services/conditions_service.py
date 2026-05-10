@@ -26,8 +26,9 @@ OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 @dataclass
 class SiteLocation:
     """Observing site coordinates."""
-    latitude: float           # degrees N (positive), S (negative)
-    longitude: float          # degrees E (positive), W (negative)
+
+    latitude: float  # degrees N (positive), S (negative)
+    longitude: float  # degrees E (positive), W (negative)
     elevation_m: float = 0.0  # meters above sea level
     name: str = "My Observatory"
 
@@ -35,6 +36,7 @@ class SiteLocation:
 @dataclass
 class WeatherData:
     """Weather snapshot. weather_api_ok=False indicates degraded mode."""
+
     cloud_cover_pct: Optional[int] = None
     wind_speed_ms: Optional[float] = None
     humidity_pct: Optional[int] = None
@@ -45,20 +47,22 @@ class WeatherData:
 @dataclass
 class AstroData:
     """Astronomical observing parameters at a given UTC time."""
+
     sun_altitude_deg: float
     sun_azimuth_deg: float
     moon_altitude_deg: float
     moon_azimuth_deg: float
     moon_illumination_pct: float
-    is_astronomical_night: bool   # sun_alt < -18°
-    is_nautical_twilight: bool    # -18° <= sun_alt < -12°
-    is_civil_twilight: bool       # -12° <= sun_alt < -6°
+    is_astronomical_night: bool  # sun_alt < -18°
+    is_nautical_twilight: bool  # -18° <= sun_alt < -12°
+    is_civil_twilight: bool  # -12° <= sun_alt < -6°
     utc_time: datetime
 
 
 @dataclass
 class ConditionsData:
     """Combined snapshot for a site at a given time."""
+
     site_name: str
     weather: WeatherData
     astro: AstroData
@@ -82,7 +86,7 @@ class ConditionsService:
         )
         self._http = httpx.Client(timeout=http_timeout)
         # Pin to builtin ephemeris so first call doesn't try to download JPL data
-        solar_system_ephemeris.set('builtin')
+        solar_system_ephemeris.set("builtin")
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -120,12 +124,14 @@ class ConditionsService:
             t = anchor + timedelta(hours=i)
             astro = self._compute_astro(Time(t))
             weather = weather_by_hour[i] if i < len(weather_by_hour) else WeatherData()
-            results.append(ConditionsData(
-                site_name=self.site.name,
-                weather=weather,
-                astro=astro,
-                timestamp=t,
-            ))
+            results.append(
+                ConditionsData(
+                    site_name=self.site.name,
+                    weather=weather,
+                    astro=astro,
+                    timestamp=t,
+                )
+            )
         return results
 
     # ------------------------------------------------------------------
@@ -136,11 +142,11 @@ class ConditionsService:
         """Compute sun/moon position and twilight flags at `time`."""
         frame = AltAz(obstime=time, location=self._location)
         sun_altaz = get_sun(time).transform_to(frame)
-        moon_altaz = get_body('moon', time).transform_to(frame)
+        moon_altaz = get_body("moon", time).transform_to(frame)
 
         # Moon illumination from sun-moon elongation
         sun_coord = get_sun(time)
-        moon_coord = get_body('moon', time)
+        moon_coord = get_body("moon", time)
         elongation = sun_coord.separation(moon_coord)
         illumination_pct = float((1 - math.cos(elongation.rad)) / 2 * 100)
 
@@ -208,13 +214,15 @@ class ConditionsService:
             n = min(len(cloud), len(wind), len(humidity), len(temp), hours)
             out: List[WeatherData] = []
             for i in range(n):
-                out.append(WeatherData(
-                    cloud_cover_pct=_as_int(cloud[i]),
-                    wind_speed_ms=_as_float(wind[i]),
-                    humidity_pct=_as_int(humidity[i]),
-                    temperature_c=_as_float(temp[i]),
-                    weather_api_ok=True,
-                ))
+                out.append(
+                    WeatherData(
+                        cloud_cover_pct=_as_int(cloud[i]),
+                        wind_speed_ms=_as_float(wind[i]),
+                        humidity_pct=_as_int(humidity[i]),
+                        temperature_c=_as_float(temp[i]),
+                        weather_api_ok=True,
+                    )
+                )
             # Pad with degraded entries if API returned fewer points than requested
             while len(out) < hours:
                 out.append(WeatherData(weather_api_ok=False))

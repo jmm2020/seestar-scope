@@ -1,4 +1,5 @@
 """SeestarScope cosmic theme - starfield background, glowing accents, astronomy icons."""
+
 import streamlit as st
 
 # Navigation items with icons - use actual emoji characters
@@ -18,18 +19,18 @@ NAV_ITEMS = {
 }
 
 NAV_ICONS = {
-    "Dashboard": "\u2604\ufe0f",   # comet
+    "Dashboard": "\u2604\ufe0f",  # comet
     "Conditions": "\U0001f324\ufe0f",  # sun behind small cloud
-    "Live Status": "\U0001f4e1",   # satellite antenna
-    "Sky Map": "\U0001f30c",       # milky way
-    "GoTo": "\u2b50",              # star
-    "Imaging": "\U0001f4f7",       # camera
-    "Focus": "\U0001f52d",         # telescope
-    "Autofocus": "\U0001f3af",     # bullseye
-    "Plate Solve": "\U0001f5fa\ufe0f", # world map
-    "Sequence": "\U0001f3ac",      # clapper
-    "Gallery": "\U0001f5bc\ufe0f", # framed picture
-    "Settings": "\u2699\ufe0f",    # gear
+    "Live Status": "\U0001f4e1",  # satellite antenna
+    "Sky Map": "\U0001f30c",  # milky way
+    "GoTo": "\u2b50",  # star
+    "Imaging": "\U0001f4f7",  # camera
+    "Focus": "\U0001f52d",  # telescope
+    "Autofocus": "\U0001f3af",  # bullseye
+    "Plate Solve": "\U0001f5fa\ufe0f",  # world map
+    "Sequence": "\U0001f3ac",  # clapper
+    "Gallery": "\U0001f5bc\ufe0f",  # framed picture
+    "Settings": "\u2699\ufe0f",  # gear
 }
 
 DEVICE_ICONS = {
@@ -43,7 +44,8 @@ DEVICE_ICONS = {
 
 def inject_cosmic_css():
     """Inject the full cosmic theme CSS."""
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     /* ===== STARFIELD BACKGROUND ===== */
     @keyframes twinkle {
@@ -344,12 +346,15 @@ def inject_cosmic_css():
         gap: 12px;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_sidebar_brand():
     """Render the branded sidebar header with logo effect."""
-    st.markdown("""
+    st.markdown(
+        """
     <div style="text-align: center; padding: 10px 0 5px 0;">
         <div style="font-size: 3rem; line-height: 1; margin-bottom: 4px;">
             &#x1F52D;
@@ -372,12 +377,15 @@ def render_sidebar_brand():
             margin-top: 2px;
         ">SEESTAR S50 CONTROL</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_connection_status(alpaca, stellarium):
     """Render device connection indicators with icons."""
-    st.markdown("""
+    st.markdown(
+        """
     <div style="
         font-size: 0.7rem;
         color: rgba(160, 180, 220, 0.6);
@@ -386,7 +394,9 @@ def render_connection_status(alpaca, stellarium):
         margin-bottom: 8px;
         margin-top: 4px;
     ">DEVICES</div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     device_labels = {
         "telescope": "&#x1F52D; Telescope",
@@ -401,20 +411,24 @@ def render_connection_status(alpaca, stellarium):
         dot = "&#x1F7E2;" if connected else "&#x1F534;"
         label = device_labels.get(device, device.title())
         color = "#00e5ff" if connected else "#ff4466"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="
             padding: 3px 8px;
             font-size: 0.85rem;
             font-family: monospace;
             color: {color};
         ">{dot} {label}</div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Stellarium
     stell_ok = stellarium.is_available()
     dot = "&#x1F7E2;" if stell_ok else "&#x1F534;"
     color = "#aa88ff" if stell_ok else "#ff4466"
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div style="
         padding: 3px 8px;
         font-size: 0.85rem;
@@ -422,7 +436,9 @@ def render_connection_status(alpaca, stellarium):
         color: {color};
         margin-top: 4px;
     ">{dot} &#x2B50; Stellarium</div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_nav_radio():

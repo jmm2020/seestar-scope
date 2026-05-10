@@ -3,6 +3,7 @@
 Reads from /api/conditions/{current,forecast}. Astronomy data renders even
 when the weather API is unreachable (graceful degradation).
 """
+
 import os
 import time
 import logging
@@ -55,11 +56,11 @@ def _twilight_label(astro: dict) -> tuple[str, str]:
     if astro["is_astronomical_night"]:
         return ("Astronomical Night", "#22c55e")  # green — best
     if astro["is_nautical_twilight"]:
-        return ("Nautical Twilight", "#facc15")   # yellow
+        return ("Nautical Twilight", "#facc15")  # yellow
     if astro["is_civil_twilight"]:
-        return ("Civil Twilight", "#fb923c")      # orange
+        return ("Civil Twilight", "#fb923c")  # orange
     if astro["sun_altitude_deg"] >= 0:
-        return ("Daytime", "#ef4444")             # red — no observing
+        return ("Daytime", "#ef4444")  # red — no observing
     return ("Pre-dark", "#fb923c")
 
 
@@ -78,13 +79,14 @@ def _moon_phase_label(illumination_pct: float) -> str:
 def render_conditions(config):
     """Main entry point — render observing conditions page."""
     st.title("\U0001f324️ Observing Conditions")
-    st.caption(f"Site: {getattr(config, 'site_name', 'My Observatory')} "
-               f"({getattr(config, 'site_latitude', 0):.2f}°, "
-               f"{getattr(config, 'site_longitude', 0):.2f}°)")
+    st.caption(
+        f"Site: {getattr(config, 'site_name', 'My Observatory')} "
+        f"({getattr(config, 'site_latitude', 0):.2f}°, "
+        f"{getattr(config, 'site_longitude', 0):.2f}°)"
+    )
 
     if not _check_backend_reachable():
-        st.error(f"⚠️ Backend API is not reachable at {BACKEND_URL}. "
-                 "Conditions data unavailable.")
+        st.error(f"⚠️ Backend API is not reachable at {BACKEND_URL}. Conditions data unavailable.")
         return
 
     # Auto-refresh + manual refresh controls
@@ -107,8 +109,7 @@ def render_conditions(config):
 
     # --- Weather panel ---
     if not weather["weather_api_ok"]:
-        st.warning("⚠️ Open-Meteo weather API unreachable — "
-                   "showing astronomical data only.")
+        st.warning("⚠️ Open-Meteo weather API unreachable — showing astronomical data only.")
 
     st.subheader("Current Conditions")
     w1, w2, w3, w4 = st.columns(4)
@@ -118,12 +119,21 @@ def render_conditions(config):
     humidity = weather["humidity_pct"]
     temp = weather["temperature_c"]
 
-    w1.metric("Cloud Cover", f"{cloud}%" if cloud is not None else "—",
-              help="Lower is better — <20% is excellent for imaging")
-    w2.metric("Wind", f"{wind:.1f} m/s" if wind is not None else "—",
-              help="Wind speed at 10m above ground")
-    w3.metric("Humidity", f"{humidity}%" if humidity is not None else "—",
-              help="High humidity (>80%) increases dew risk")
+    w1.metric(
+        "Cloud Cover",
+        f"{cloud}%" if cloud is not None else "—",
+        help="Lower is better — <20% is excellent for imaging",
+    )
+    w2.metric(
+        "Wind",
+        f"{wind:.1f} m/s" if wind is not None else "—",
+        help="Wind speed at 10m above ground",
+    )
+    w3.metric(
+        "Humidity",
+        f"{humidity}%" if humidity is not None else "—",
+        help="High humidity (>80%) increases dew risk",
+    )
     w4.metric("Temperature", f"{temp:.1f} °C" if temp is not None else "—")
 
     st.divider()
@@ -137,21 +147,26 @@ def render_conditions(config):
     moon_ill = astro["moon_illumination_pct"]
     label, color = _twilight_label(astro)
 
-    a1.metric("Sun Altitude", f"{sun_alt:.1f}°",
-              help="Sun position. Astronomical night begins at -18°.")
+    a1.metric(
+        "Sun Altitude", f"{sun_alt:.1f}°", help="Sun position. Astronomical night begins at -18°."
+    )
     moon_alt_label = f"{moon_alt:.1f}°" if moon_alt >= 0 else "Below horizon"
-    a2.metric("Moon Altitude", moon_alt_label,
-              help="Moon position. Below horizon = no light pollution from moon.")
-    a3.metric("Moon Phase",
-              f"{moon_ill:.0f}% — {_moon_phase_label(moon_ill)}",
-              help="Moon illumination percentage")
-    a4.metric("Twilight", label,
-              help="Astronomical Night = darkest sky for deep-sky imaging")
+    a2.metric(
+        "Moon Altitude",
+        moon_alt_label,
+        help="Moon position. Below horizon = no light pollution from moon.",
+    )
+    a3.metric(
+        "Moon Phase",
+        f"{moon_ill:.0f}% — {_moon_phase_label(moon_ill)}",
+        help="Moon illumination percentage",
+    )
+    a4.metric("Twilight", label, help="Astronomical Night = darkest sky for deep-sky imaging")
 
     # Twilight badge with color
     st.markdown(
         f'<div style="padding:6px 14px;display:inline-block;border-radius:8px;'
-        f'background:{color}22;border:1px solid {color}66;color:{color};'
+        f"background:{color}22;border:1px solid {color}66;color:{color};"
         f'font-weight:600;letter-spacing:1px;">{label.upper()}</div>',
         unsafe_allow_html=True,
     )
@@ -171,15 +186,22 @@ def render_conditions(config):
             xs = list(range(len(forecast)))
             ys = [p["weather"]["cloud_cover_pct"] or 0 for p in forecast]
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=xs, y=ys,
-                mode="lines",
-                fill="tozeroy",
-                line=dict(color="#00c8ff", width=2),
-                name="Cloud cover %",
-            ))
-            fig.add_hline(y=20, line=dict(color="#22c55e", width=1, dash="dash"),
-                          annotation_text="20% (excellent)", annotation_position="top right")
+            fig.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=ys,
+                    mode="lines",
+                    fill="tozeroy",
+                    line=dict(color="#00c8ff", width=2),
+                    name="Cloud cover %",
+                )
+            )
+            fig.add_hline(
+                y=20,
+                line=dict(color="#22c55e", width=1, dash="dash"),
+                annotation_text="20% (excellent)",
+                annotation_position="top right",
+            )
             fig.update_layout(
                 xaxis_title="Hours from now",
                 yaxis_title="Cloud cover (%)",

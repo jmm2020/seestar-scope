@@ -1,4 +1,5 @@
 """Tests for coordinate conversion and formatting utilities."""
+
 import sys
 from pathlib import Path
 

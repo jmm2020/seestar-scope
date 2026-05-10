@@ -1,4 +1,5 @@
 """Tests for ConditionsService — astropy + Open-Meteo."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -16,6 +17,7 @@ from backend.services.conditions_service import (  # noqa: E402
 
 
 # --- Helpers ---------------------------------------------------------------
+
 
 def _mock_current_response(cloud=25, wind=5.0, humidity=60, temp=15.0):
     mock_resp = MagicMock()
@@ -54,6 +56,7 @@ def service():
 
 # --- Construction ----------------------------------------------------------
 
+
 def test_site_location_construction(service):
     assert service.site.latitude == 37.12
     assert service.site.longitude == -123.45
@@ -62,8 +65,10 @@ def test_site_location_construction(service):
 
 # --- Astro computation -----------------------------------------------------
 
+
 def test_compute_astro_returns_valid_altitudes(service):
     from astropy.time import Time
+
     astro = service._compute_astro(Time.now())
     assert isinstance(astro, AstroData)
     assert -90.0 <= astro.sun_altitude_deg <= 90.0
@@ -74,6 +79,7 @@ def test_compute_astro_returns_valid_altitudes(service):
 def test_twilight_flags_mutually_exclusive(service):
     """At any sun altitude, at most one twilight flag is True."""
     from astropy.time import Time
+
     astro = service._compute_astro(Time.now())
     flags = [
         astro.is_astronomical_night,
@@ -84,6 +90,7 @@ def test_twilight_flags_mutually_exclusive(service):
 
 
 # --- Weather fetch ---------------------------------------------------------
+
 
 def test_fetch_weather_success(service):
     with patch.object(service._http, "get", return_value=_mock_current_response()):
@@ -97,8 +104,7 @@ def test_fetch_weather_success(service):
 
 def test_fetch_weather_unreachable(service):
     """ConnectError / network failure should yield weather_api_ok=False."""
-    with patch.object(service._http, "get",
-                      side_effect=httpx.ConnectError("refused")):
+    with patch.object(service._http, "get", side_effect=httpx.ConnectError("refused")):
         weather = service._fetch_weather()
     assert weather.weather_api_ok is False
     assert weather.cloud_cover_pct is None
@@ -118,9 +124,13 @@ def test_fetch_weather_5xx(service):
 
 # --- get_current integration ----------------------------------------------
 
+
 def test_get_current_returns_conditions_data(service):
-    with patch.object(service._http, "get", return_value=_mock_current_response(
-            cloud=10, wind=2.5, humidity=40, temp=18.0)):
+    with patch.object(
+        service._http,
+        "get",
+        return_value=_mock_current_response(cloud=10, wind=2.5, humidity=40, temp=18.0),
+    ):
         data = service.get_current()
     assert data.site_name == "Test Site"
     assert data.weather.weather_api_ok is True
@@ -131,8 +141,7 @@ def test_get_current_returns_conditions_data(service):
 
 def test_get_current_works_when_weather_down(service):
     """Astro must render even if weather API is unreachable."""
-    with patch.object(service._http, "get",
-                      side_effect=httpx.ConnectError("offline")):
+    with patch.object(service._http, "get", side_effect=httpx.ConnectError("offline")):
         data = service.get_current()
     assert data.weather.weather_api_ok is False
     assert isinstance(data.astro, AstroData)
@@ -140,6 +149,7 @@ def test_get_current_works_when_weather_down(service):
 
 
 # --- Forecast --------------------------------------------------------------
+
 
 def test_get_forecast_returns_n_hours(service):
     with patch.object(service._http, "get", return_value=_mock_hourly_response(hours=12)):
@@ -156,8 +166,7 @@ def test_get_forecast_clamps_hours(service):
 
 
 def test_get_forecast_degrades_on_failure(service):
-    with patch.object(service._http, "get",
-                      side_effect=httpx.ConnectError("offline")):
+    with patch.object(service._http, "get", side_effect=httpx.ConnectError("offline")):
         forecast = service.get_forecast(hours=6)
     assert len(forecast) == 6
     assert all(p.weather.weather_api_ok is False for p in forecast)

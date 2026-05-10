@@ -1,4 +1,5 @@
 """Tests for goto view helper functions."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -17,14 +18,14 @@ def test_alp_reachable_when_200():
 
 
 def test_alp_unreachable_on_connection_error():
-    with patch("views.goto.requests.get",
-               side_effect=requests.exceptions.ConnectionError("refused")):
+    with patch(
+        "views.goto.requests.get", side_effect=requests.exceptions.ConnectionError("refused")
+    ):
         assert _check_alp_reachable() is False
 
 
 def test_alp_unreachable_on_timeout():
-    with patch("views.goto.requests.get",
-               side_effect=requests.exceptions.Timeout("timed out")):
+    with patch("views.goto.requests.get", side_effect=requests.exceptions.Timeout("timed out")):
         assert _check_alp_reachable() is False
 
 
