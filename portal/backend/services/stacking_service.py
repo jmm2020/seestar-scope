@@ -32,8 +32,6 @@ import numpy as np
 from PIL import Image
 from astropy.io import fits
 
-from backend.app.services.siril_service import SirilService
-
 logger = logging.getLogger(__name__)
 
 
@@ -89,13 +87,8 @@ class StackingService:
         self._config: StackingConfig = StackingConfig()
         self._progress: float = 0.0
 
-        # Wrap existing SirilService for directory layout + utilities
-        self._siril_service = SirilService(
-            data_root=data_root,
-            gallery_dir=gallery_dir,
-        )
         self._gallery_dir = Path(gallery_dir)
-        self._processed_dir = self._siril_service.processed_dir
+        self._processed_dir = Path(data_root) / "processed"
 
         # Configurable Siril CLI binary (so ARM64/Flatpak can override)
         self._siril_bin = os.environ.get("SIRIL_BIN", "siril-cli")
