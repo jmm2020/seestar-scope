@@ -56,8 +56,25 @@ The ALP backend talks to the S50 directly via TCP.
 | `views/theme.py` | Cosmic CSS theme |
 | `catalog/messier.py` | Messier catalog (110 objects) |
 | `catalog/ngc_ic.py` | NGC/IC catalog subset |
-| `utils/` | Coordinates, image processing, session logger |
+| `utils/` | Coordinates, image processing (`image_enhancement.py` — 6-algorithm pipeline imported by backend), session logger |
 | `tests/` | Unit + integration tests |
+
+## Portal Backend (`portal/backend/`)
+
+The FastAPI backend (`seestar-portal-backend`, port `:8503`) handles all persistent state and CPU-bound work, keeping the Streamlit UI stateless. It is distinct from `seestar-enhance` (GPU-only, separate service).
+
+| File / Dir | Purpose |
+|------------|---------|
+| `main.py` | FastAPI app entry point; mounts routers |
+| `config.py` | `Settings(BaseSettings)` — paths, ports, env-var overrides |
+| `routers/postprocessing.py` | POST `/api/postprocessing/apply` (async job), GET `/jobs/{id}`, calibration frame CRUD |
+| `routers/gallery.py` | Image gallery CRUD, thumbnail serving |
+| `routers/autofocus.py` | Autofocus run endpoint |
+| `services/postprocessing_service.py` | Enhancement pipeline: calibration frame management + `apply_pipeline()` |
+| `services/autofocus_service.py` | Autofocus algorithm service |
+| `services/siril_service.py` | Siril stacking integration |
+
+**Security note**: `image_path` in `PostprocessingRequest` is restricted to `captures_dir`, `gallery_dir`, and `processing_dir` via Pydantic validator to prevent path traversal.
 
 ## ALP Backend (`vendor/seestar_alp` submodule)
 
@@ -127,6 +144,30 @@ seestar-enhance (GraXpert → StarNet++)
   ▼
 portal (display)
 ```
+
+## Data Flow — Post-Processing Pipeline
+
+```
+User (browser)
+  │ click "Process" or "Apply Enhancement"
+  ▼
+portal views/imaging.py or views/gallery.py
+  │ POST /api/postprocessing/apply  {image_path, stretch, ...}
+  ▼
+seestar-portal-backend (FastAPI, CPU)
+  │ background task: PostprocessingService.apply_pipeline()
+  │   ├── optional: _apply_calibration() (bias→dark→flat)
+  │   └── utils/image_enhancement.run_pipeline()
+  │         background_sub → hot_pixel → denoise → stretch → sharpen → color_balance
+  │ output written to data/processed/
+  ▼
+portal polls GET /api/postprocessing/jobs/{job_id}
+  │ status: running → completed
+  ▼
+portal displays before/after comparison
+```
+
+**CPU vs GPU split**: `seestar-portal-backend` runs all pipeline steps on CPU (suitable for Jetson Orin ARM64). `seestar-enhance` (separate service, GPU) handles GraXpert + StarNet++ post-stack enhancement.
 
 ## CI Setup
 

@@ -17,7 +17,8 @@ import logging
 import shutil
 import tempfile
 import uuid
-from datetime import datetime
+from collections import OrderedDict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -28,7 +29,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.config import settings
 from backend.services.postprocessing_service import (
@@ -52,8 +53,9 @@ def get_service() -> PostprocessingService:
     return _service
 
 
-# In-memory job store. Survives until backend restart.
-processing_jobs: Dict[str, PostprocessingResult] = {}
+# In-memory job store. Capped at _MAX_JOBS to prevent unbounded growth.
+_MAX_JOBS = 100
+processing_jobs: OrderedDict[str, PostprocessingResult] = OrderedDict()
 
 
 # --------------------------------------------------------------------------
@@ -77,14 +79,26 @@ class PostprocessingRequest(BaseModel):
     sharpen_radius: float = Field(1.5, ge=0.5, le=5.0)
     color_balance: bool = False
     apply_calibration: bool = False
-    output_dir: Optional[str] = None
+
+    @field_validator("image_path")
+    @classmethod
+    def image_path_must_be_safe(cls, v: str) -> str:
+        allowed_roots = [
+            settings.captures_dir.resolve(),
+            settings.gallery_dir.resolve(),
+            settings.processing_dir.resolve(),
+        ]
+        resolved = Path(v).resolve()
+        if not any(str(resolved).startswith(str(root)) for root in allowed_roots):
+            raise ValueError("image_path must be under an allowed directory")
+        return v
 
 
 class PostprocessingJobResponse(BaseModel):
     """Status snapshot of a processing job."""
 
     job_id: str
-    status: str  # "pending" | "running" | "completed" | "failed"
+    status: str  # "unknown" | "running" | "completed" | "failed"
     success: Optional[bool] = None
     output_path: Optional[str] = None
     error_message: Optional[str] = None
@@ -123,18 +137,12 @@ def _request_to_params(req: PostprocessingRequest) -> Dict[str, Any]:
         "sharpen_radius": req.sharpen_radius,
         "color_balance": req.color_balance,
         "apply_calibration": req.apply_calibration,
-        "output_dir": req.output_dir,
     }
 
 
 async def _run_pipeline_task(job_id: str, image_path: str, params: Dict[str, Any]) -> None:
     """Background runner. Stores PostprocessingResult in processing_jobs."""
     service = get_service()
-    processing_jobs[job_id] = PostprocessingResult(
-        success=False,
-        error_message=None,
-        job_id=job_id,
-    )
     try:
         result = await asyncio.to_thread(
             service.apply_pipeline,
@@ -148,7 +156,7 @@ async def _run_pipeline_task(job_id: str, image_path: str, params: Dict[str, Any
             success=False,
             error_message=str(exc),
             job_id=job_id,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc),
         )
     processing_jobs[job_id] = result
 
@@ -206,6 +214,8 @@ async def apply_postprocessing(
         error_message=None,
         job_id=job_id,
     )
+    if len(processing_jobs) > _MAX_JOBS:
+        processing_jobs.popitem(last=False)
     background_tasks.add_task(_run_pipeline_task, job_id, req.image_path, params)
     return {"job_id": job_id, "status": "started"}
 

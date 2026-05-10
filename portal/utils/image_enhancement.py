@@ -2,7 +2,10 @@
 
 Implements PixInsight-inspired processing pipeline with composable steps:
   Background Subtraction -> Hot Pixel Removal -> Noise Reduction ->
-  Stretch -> Sharpening -> Color Balance -> Star Detection Overlay
+  Stretch -> Sharpening -> Color Balance
+
+  Note: Star detection/overlay (detect_stars, draw_star_overlay) is provided
+  as a separate utility called by the view layer, not by run_pipeline().
 
 All functions operate on numpy float64 arrays normalized to [0.0, 1.0].
 Input/output conversion handled by run_pipeline().
@@ -24,7 +27,7 @@ logger = logging.getLogger(__name__)
 def stretch_histogram(
     data: np.ndarray, black_point: float = 0.1, white_point: float = 99.9
 ) -> np.ndarray:
-    """Basic percentile histogram stretch (existing algorithm, improved)."""
+    """Basic percentile histogram stretch."""
     low = np.percentile(data, black_point)
     high = np.percentile(data, white_point)
     return np.clip((data - low) / max(high - low, 1e-10), 0.0, 1.0)
@@ -108,13 +111,14 @@ def stretch_ghs(
         out = np.zeros_like(x)
 
         if np.any(above):
-            val = b * D * q_pos[above]
-            out[above] = (val + 1 - 1) / (val + 1 - 1 + 1e-10)
-            out[above] = np.log1p(val) / np.log1p(b * D * np.exp(D * (1.0 - SP)))
+            val = b * D * (q_pos[above] - 1)
+            denom = np.log1p(b * D * (np.exp(D * (1.0 - SP)) - 1))
+            out[above] = np.log1p(val) / max(denom, 1e-10)
 
         if np.any(below):
-            val = b * D * q_neg[below]
-            out[below] = 1.0 - np.log1p(val) / np.log1p(b * D * np.exp(D * SP))
+            val = b * D * (q_neg[below] - 1)
+            denom = np.log1p(b * D * (np.exp(D * SP) - 1))
+            out[below] = 1.0 - np.log1p(val) / max(denom, 1e-10)
 
         return np.clip(out, 0.0, 1.0)
 
@@ -215,7 +219,7 @@ def remove_hot_pixels(
             )
             return np.clip(cleaned, 0.0, 1.0)
 
-    # Median filter fallback
+    # Median filter path (default method, also used as lacosmic fallback)
     import cv2
 
     img_u8 = (np.clip(data, 0, 1) * 255).astype(np.uint8)
@@ -405,29 +409,55 @@ def run_pipeline(image: Image.Image, params: Dict[str, Any]) -> Image.Image:
     data = np.array(image, dtype=np.float64) / 255.0
 
     if params.get("background_sub", False):
-        box = params.get("background_box_size", 64)
-        data = subtract_background(data, box_size=box)
+        try:
+            box = params.get("background_box_size", 64)
+            data = subtract_background(data, box_size=box)
+        except ImportError:
+            logger.warning("run_pipeline: sep not available, skipping background_sub")
+        except Exception as exc:
+            raise RuntimeError(f"background_sub step failed: {exc}") from exc
 
     if params.get("hot_pixel", False):
-        method = params.get("hot_pixel_method", "median")
-        data = remove_hot_pixels(data, method=method)
+        try:
+            method = params.get("hot_pixel_method", "median")
+            data = remove_hot_pixels(data, method=method)
+        except ImportError:
+            logger.warning("run_pipeline: cv2 not available, skipping hot_pixel")
+        except Exception as exc:
+            raise RuntimeError(f"hot_pixel step failed: {exc}") from exc
 
     if params.get("denoise", False):
-        strength = params.get("denoise_strength", 7)
-        data = reduce_noise(data, strength=strength)
+        try:
+            strength = params.get("denoise_strength", 7)
+            data = reduce_noise(data, strength=strength)
+        except ImportError:
+            logger.warning("run_pipeline: cv2 not available, skipping denoise")
+        except Exception as exc:
+            raise RuntimeError(f"denoise step failed: {exc}") from exc
 
     stretch_key = params.get("stretch", "none")
     stretch_fn = STRETCH_FUNCTIONS.get(stretch_key, STRETCH_FUNCTIONS["none"])
     stretch_params = params.get("stretch_params", {})
-    data = stretch_fn(data, **stretch_params)
+    try:
+        data = stretch_fn(data, **stretch_params)
+    except Exception as exc:
+        raise RuntimeError(f"stretch step ({stretch_key}) failed: {exc}") from exc
 
     if params.get("sharpen", False):
-        amount = params.get("sharpen_amount", 1.0)
-        radius = params.get("sharpen_radius", 1.5)
-        data = sharpen_unsharp_mask(data, amount=amount, radius=radius)
+        try:
+            amount = params.get("sharpen_amount", 1.0)
+            radius = params.get("sharpen_radius", 1.5)
+            data = sharpen_unsharp_mask(data, amount=amount, radius=radius)
+        except ImportError:
+            logger.warning("run_pipeline: cv2 not available, skipping sharpen")
+        except Exception as exc:
+            raise RuntimeError(f"sharpen step failed: {exc}") from exc
 
     if params.get("color_balance", False):
-        data = balance_color(data)
+        try:
+            data = balance_color(data)
+        except Exception as exc:
+            raise RuntimeError(f"color_balance step failed: {exc}") from exc
 
     result_u8 = (np.clip(data, 0, 1) * 255).astype(np.uint8)
     return Image.fromarray(result_u8, mode=image.mode)

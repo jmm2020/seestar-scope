@@ -13,7 +13,7 @@ import shutil
 import sys
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -109,7 +109,14 @@ class PostprocessingService:
                 logger.warning("Failed to remove old master %s: %s", old, exc)
 
         dest = self.calibration_dir / f"master_{frame_type}{ext}"
-        shutil.copy2(src, dest)
+        try:
+            shutil.copy2(src, dest)
+        except OSError as exc:
+            logger.error(
+                "Failed to copy calibration frame %s from %s to %s: %s",
+                frame_type, src, dest, exc,
+            )
+            return False
         setattr(self._calibration, f"{frame_type}_path", str(dest))
         logger.info("Stored master %s at %s", frame_type, dest)
         return True
@@ -148,7 +155,7 @@ class PostprocessingService:
         self, image_path: str, params: Dict[str, Any], job_id: Optional[str] = None
     ) -> PostprocessingResult:
         """Run the enhancement pipeline against ``image_path`` and persist output."""
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         job_id = job_id or f"pp_{uuid.uuid4().hex[:8]}"
 
         try:
@@ -159,7 +166,7 @@ class PostprocessingService:
                 success=False,
                 error_message=f"image_enhancement import failed: {exc}",
                 job_id=job_id,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(timezone.utc),
             )
             self._current_result = result
             return result
@@ -170,7 +177,7 @@ class PostprocessingService:
                 success=False,
                 error_message=f"Source image not found: {image_path}",
                 job_id=job_id,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(timezone.utc),
             )
             self._current_result = result
             return result
@@ -188,7 +195,7 @@ class PostprocessingService:
 
             enhanced = run_pipeline(image, params)
 
-            output_dir = Path(params.get("output_dir") or self.processed_dir)
+            output_dir = self.processed_dir
             output_dir.mkdir(parents=True, exist_ok=True)
             output_name = f"{src.stem}_processed_{job_id}{src.suffix or '.png'}"
             output_path = output_dir / output_name
@@ -202,7 +209,7 @@ class PostprocessingService:
                 "std": float(arr_out.std()),
             }
 
-            duration = (datetime.utcnow() - start).total_seconds()
+            duration = (datetime.now(timezone.utc) - start).total_seconds()
 
             if stats["max"] == 0:
                 result = PostprocessingResult(
@@ -212,7 +219,7 @@ class PostprocessingService:
                     stats=stats,
                     duration_seconds=duration,
                     job_id=job_id,
-                    completed_at=datetime.utcnow(),
+                    completed_at=datetime.now(timezone.utc),
                 )
             else:
                 result = PostprocessingResult(
@@ -221,17 +228,17 @@ class PostprocessingService:
                     stats=stats,
                     duration_seconds=duration,
                     job_id=job_id,
-                    completed_at=datetime.utcnow(),
+                    completed_at=datetime.now(timezone.utc),
                 )
         except Exception as exc:
             logger.error("PostprocessingService: pipeline failed: %s", exc, exc_info=True)
-            duration = (datetime.utcnow() - start).total_seconds()
+            duration = (datetime.now(timezone.utc) - start).total_seconds()
             result = PostprocessingResult(
                 success=False,
                 error_message=str(exc),
                 duration_seconds=duration,
                 job_id=job_id,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(timezone.utc),
             )
 
         self._current_result = result

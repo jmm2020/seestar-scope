@@ -1,5 +1,6 @@
 """Camera control, live view stream, and stacking controls page."""
 
+import logging
 import os
 import time
 
@@ -7,6 +8,8 @@ import requests
 import streamlit as st
 
 from utils.image_processing import alpaca_imagearray_to_image, save_image
+
+logger = logging.getLogger(__name__)
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://seestar-portal-backend:8503")
 
@@ -321,7 +324,8 @@ def _render_camera_status(alpaca):
                 current = (
                     names[pos] if names and pos is not None and pos < len(names) else "Unknown"
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("Filter status unavailable: %s", exc)
                 current = "N/A"
             st.metric(
                 "Filter",
@@ -454,7 +458,11 @@ def _poll_exposure(alpaca):
         cam = alpaca.get_camera_status()
         state_code = cam.get("state_code")
         state_text = cam.get("state", "Unknown")
-    except Exception:
+    except Exception as exc:
+        logger.debug("Camera poll failed during exposure: %s", exc)
+        st.warning("Camera connection lost during exposure — retrying...")
+        time.sleep(1)
+        st.rerun()
         return
 
     duration = st.session_state.get("exposure_duration", 10)
@@ -487,7 +495,14 @@ def _check_postprocessing_health() -> bool:
     """Probe the FastAPI postprocessing endpoint."""
     try:
         return requests.get(f"{BACKEND_URL}/api/postprocessing/health", timeout=2).ok
-    except Exception:
+    except requests.exceptions.ConnectionError as exc:
+        logger.debug("Postprocessing health check: connection refused: %s", exc)
+        return False
+    except requests.exceptions.Timeout:
+        logger.debug("Postprocessing health check: timed out after 2s")
+        return False
+    except Exception as exc:
+        logger.debug("Postprocessing health check failed: %s", exc)
         return False
 
 
