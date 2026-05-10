@@ -1,4 +1,5 @@
 """Main dashboard page - live telescope status + native device telemetry."""
+
 import streamlit as st
 import time
 import logging
@@ -33,12 +34,21 @@ def render_dashboard(alpaca, stellarium):
         try:
             status = alpaca.get_telescope_status()
             if status["ra"] is not None:
-                st.metric("Right Ascension", format_ra(status["ra"]),
-                          help="Current RA in J2000 epoch (hours, minutes, seconds)")
-                st.metric("Declination", format_dec(status["dec"]),
-                          help="Current Dec in J2000 epoch (degrees, arcmin, arcsec)")
-                st.metric("Tracking", "ON" if status["tracking"] else "OFF",
-                          help="Sidereal tracking compensates for Earth's rotation")
+                st.metric(
+                    "Right Ascension",
+                    format_ra(status["ra"]),
+                    help="Current RA in J2000 epoch (hours, minutes, seconds)",
+                )
+                st.metric(
+                    "Declination",
+                    format_dec(status["dec"]),
+                    help="Current Dec in J2000 epoch (degrees, arcmin, arcsec)",
+                )
+                st.metric(
+                    "Tracking",
+                    "ON" if status["tracking"] else "OFF",
+                    help="Sidereal tracking compensates for Earth's rotation",
+                )
 
                 status_text = []
                 if status["slewing"]:
@@ -47,8 +57,11 @@ def render_dashboard(alpaca, stellarium):
                     status_text.append("HOME")
                 if status["at_park"]:
                     status_text.append("PARKED")
-                st.metric("Status", " | ".join(status_text) if status_text else "Ready",
-                          help="Ready = idle, SLEWING = moving to target, PARKED = safe position")
+                st.metric(
+                    "Status",
+                    " | ".join(status_text) if status_text else "Ready",
+                    help="Ready = idle, SLEWING = moving to target, PARKED = safe position",
+                )
             else:
                 st.warning("Telescope not responding")
         except Exception as e:
@@ -58,37 +71,59 @@ def render_dashboard(alpaca, stellarium):
         st.subheader("Camera & Sensors")
         try:
             cam = alpaca.get_camera_status()
-            st.metric("Camera State", cam["state"],
-                      help="Idle, Exposing, Reading, Download, or Error")
-            st.metric("Gain", cam["gain"],
-                      help="Sony IMX462 sensor gain (0\u2013400). Higher = brighter but noisier")
+            st.metric(
+                "Camera State", cam["state"], help="Idle, Exposing, Reading, Download, or Error"
+            )
+            st.metric(
+                "Gain",
+                cam["gain"],
+                help="Sony IMX462 sensor gain (0\u2013400). Higher = brighter but noisier",
+            )
         except Exception as e:
             st.error(f"Camera status error: {e}")
 
         try:
             focus = alpaca.get_focuser_status()
-            st.metric("Focuser Position", focus["position"],
-                      help="Relative focuser step position (lower = closer to sensor)")
+            st.metric(
+                "Focuser Position",
+                focus["position"],
+                help="Relative focuser step position (lower = closer to sensor)",
+            )
             temp = focus["temperature"]
-            temp_str = f"{temp:.1f}\u00b0C / {temp * 9/5 + 32:.1f}\u00b0F" if temp is not None else "N/A"
-            st.metric("Temperature", temp_str,
-                      help="Focuser/sensor temperature \u2014 affects focus drift over time")
+            temp_str = (
+                f"{temp:.1f}\u00b0C / {temp * 9 / 5 + 32:.1f}\u00b0F" if temp is not None else "N/A"
+            )
+            st.metric(
+                "Temperature",
+                temp_str,
+                help="Focuser/sensor temperature \u2014 affects focus drift over time",
+            )
         except Exception as e:
             st.error(f"Focuser status error: {e}")
 
         try:
             filter_names = alpaca.get_filter_names()
             filter_pos = alpaca.get_filter_position()
-            current_filter = filter_names[filter_pos] if filter_names and filter_pos is not None and filter_pos < len(filter_names) else "Unknown"
-            st.metric("Filter", current_filter,
-                      help="Dark = no filter, IR = infrared cut, LP = light pollution")
+            current_filter = (
+                filter_names[filter_pos]
+                if filter_names and filter_pos is not None and filter_pos < len(filter_names)
+                else "Unknown"
+            )
+            st.metric(
+                "Filter",
+                current_filter,
+                help="Dark = no filter, IR = infrared cut, LP = light pollution",
+            )
         except Exception as e:
             st.error(f"Filter wheel error: {e}")
 
         try:
             dew = alpaca.get_dew_heater()
-            st.metric("Dew Heater", "ON" if dew else "OFF",
-                      help="Prevents condensation on the lens in humid conditions")
+            st.metric(
+                "Dew Heater",
+                "ON" if dew else "OFF",
+                help="Prevents condensation on the lens in humid conditions",
+            )
         except Exception as e:
             st.error(f"Dew heater error: {e}")
 
@@ -107,12 +142,17 @@ def render_dashboard(alpaca, stellarium):
         obj = stellarium.get_selected_object()
         if obj:
             st.success(f"Selected: **{obj.name}** ({obj.object_type}) in {obj.constellation}")
-            st.write(f"RA: {format_ra(obj.ra_j2000_hours)} | "
-                     f"Dec: {format_dec(obj.dec_j2000_degrees)} | "
-                     f"Alt: {obj.altitude:.1f}\u00b0 | Mag: {obj.magnitude:.1f}")
+            st.write(
+                f"RA: {format_ra(obj.ra_j2000_hours)} | "
+                f"Dec: {format_dec(obj.dec_j2000_degrees)} | "
+                f"Alt: {obj.altitude:.1f}\u00b0 | Mag: {obj.magnitude:.1f}"
+            )
             if obj.above_horizon:
-                if st.button("Slew to Selected Object", type="primary",
-                             help="Send a GoTo command to slew the telescope to this object"):
+                if st.button(
+                    "Slew to Selected Object",
+                    type="primary",
+                    help="Send a GoTo command to slew the telescope to this object",
+                ):
                     resp = alpaca.slew_to(obj.ra_j2000_hours, obj.dec_j2000_degrees)
                     if resp.success:
                         st.session_state["slewing_target"] = obj.name
@@ -123,8 +163,10 @@ def render_dashboard(alpaca, stellarium):
         else:
             st.info("No object selected in Stellarium. Click on something in the sky map.")
     else:
-        st.warning("Stellarium Remote Control not available on port 8091. "
-                   "Enable it in Stellarium: Configuration > Plugins > Remote Control.")
+        st.warning(
+            "Stellarium Remote Control not available on port 8091. "
+            "Enable it in Stellarium: Configuration > Plugins > Remote Control."
+        )
 
     # Auto-refresh controls
     st.divider()
@@ -133,9 +175,12 @@ def render_dashboard(alpaca, stellarium):
         if st.button("Refresh Now", key="dash_refresh", use_container_width=True):
             st.rerun()
     with col_auto:
-        auto_refresh = st.checkbox("Auto-refresh (5s)", value=False,
-                                   help="Enable automatic refresh every 5 seconds. "
-                                        "Disabled by default to prevent flickering.")
+        auto_refresh = st.checkbox(
+            "Auto-refresh (5s)",
+            value=False,
+            help="Enable automatic refresh every 5 seconds. "
+            "Disabled by default to prevent flickering.",
+        )
     if auto_refresh:
         time.sleep(5)
         st.rerun()
@@ -166,8 +211,7 @@ def _render_device_health(alpaca):
                     batt_icon = "\U0001f7e1"  # yellow circle
                 else:
                     batt_icon = "\U0001f534"  # red circle
-                st.metric("Battery", f"{batt_pct}%",
-                          help=f"Charge status: {charge}")
+                st.metric("Battery", f"{batt_pct}%", help=f"Charge status: {charge}")
                 st.progress(batt_pct / 100)
                 batt_temp = pi.get("battery_temp")
                 caption_parts = [charge]
@@ -185,8 +229,11 @@ def _render_device_health(alpaca):
                 # Convert dBm to approximate percentage
                 # -30 dBm = excellent (100%), -90 dBm = unusable (0%)
                 wifi_pct = max(0, min(100, int((sig + 90) * 100 / 60)))
-                st.metric("WiFi Signal", f"{sig} dBm",
-                          help=f"Connected to: {station.get('ssid', 'Unknown')}")
+                st.metric(
+                    "WiFi Signal",
+                    f"{sig} dBm",
+                    help=f"Connected to: {station.get('ssid', 'Unknown')}",
+                )
                 st.progress(wifi_pct / 100)
                 ssid = station.get("ssid", "Unknown")
                 ip = station.get("ip", "")
@@ -205,8 +252,7 @@ def _render_device_health(alpaca):
                 used_pct = vol.get("used_percent", 0)
                 free_gb = free_mb / 1024
                 total_gb = total_mb / 1024
-                st.metric("Free Storage", f"{free_gb:.1f} GB",
-                          help=f"Total: {total_gb:.1f} GB")
+                st.metric("Free Storage", f"{free_gb:.1f} GB", help=f"Total: {total_gb:.1f} GB")
                 st.progress(1.0 - (used_pct / 100))  # Show free as progress
                 st.caption(f"{100 - used_pct}% free of {total_gb:.0f} GB")
             else:
@@ -223,8 +269,11 @@ def _render_device_health(alpaca):
                     temp_icon = "\U0001f7e1"  # yellow
                 else:
                     temp_icon = "\U0001f7e2"  # green
-                st.metric("CPU Temp", f"{cpu_temp:.1f}\u00b0C",
-                          help="Seestar processor temperature. >70\u00b0C may cause throttling.")
+                st.metric(
+                    "CPU Temp",
+                    f"{cpu_temp:.1f}\u00b0C",
+                    help="Seestar processor temperature. >70\u00b0C may cause throttling.",
+                )
                 is_over = pi.get("is_overtemp", False)
                 st.caption(f"{temp_icon} {'OVERTEMP!' if is_over else 'Normal'}")
             else:
@@ -245,8 +294,11 @@ def _render_device_health(alpaca):
                     lvl_icon = "\U0001f7e1"
                 else:
                     lvl_icon = "\U0001f534"
-                st.metric("Tilt Angle", f"{angle:.1f}\u00b0",
-                          help="Leveling sensor. <5\u00b0 is good for equatorial mode.")
+                st.metric(
+                    "Tilt Angle",
+                    f"{angle:.1f}\u00b0",
+                    help="Leveling sensor. <5\u00b0 is good for equatorial mode.",
+                )
                 st.caption(f"{lvl_icon} {'Level' if angle <= 5 else 'Tilted'}")
             else:
                 st.metric("Tilt Angle", "N/A")
@@ -261,8 +313,11 @@ def _render_device_health(alpaca):
                 cardinals = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
                 idx = int((direction + 22.5) / 45) % 8
                 cardinal = cardinals[idx]
-                st.metric("Compass", f"{direction:.1f}\u00b0 {cardinal}",
-                          help="Magnetic heading from the internal compass sensor")
+                st.metric(
+                    "Compass",
+                    f"{direction:.1f}\u00b0 {cardinal}",
+                    help="Magnetic heading from the internal compass sensor",
+                )
             else:
                 st.metric("Compass", "N/A")
 
@@ -273,8 +328,11 @@ def _render_device_health(alpaca):
             closed = mount.get("close", False)
             mode = "Equatorial" if equ else "Alt-Az"
             arm = "Closed" if closed else "Open"
-            st.metric("Mount Mode", mode,
-                      help="Equatorial mode enables better tracking for long exposures")
+            st.metric(
+                "Mount Mode",
+                mode,
+                help="Equatorial mode enables better tracking for long exposures",
+            )
             st.caption(f"Arm: {arm} | Tracking: {'ON' if mount.get('tracking') else 'OFF'}")
 
         # Device info
@@ -284,9 +342,10 @@ def _render_device_health(alpaca):
             fw = device.get("firmware_ver_string", "Unknown")
             model = device.get("product_model", "Seestar")
             focal = setting.get("focal_pos", "N/A")
-            st.metric("Firmware", f"v{fw}",
-                      help=f"{model} | SN: {device.get('sn', 'N/A')}")
-            st.caption(f"Focal: {focal} | f/{device.get('fnumber', '?')} {device.get('focal_len', '?')}mm")
+            st.metric("Firmware", f"v{fw}", help=f"{model} | SN: {device.get('sn', 'N/A')}")
+            st.caption(
+                f"Focal: {focal} | f/{device.get('fnumber', '?')} {device.get('focal_len', '?')}mm"
+            )
 
     except Exception as e:
         logger.error(f"Device health error: {e}")
@@ -325,10 +384,14 @@ def _render_view_state(alpaca):
                 st.metric("State", state.title())
 
         with col_mode:
-            mode_labels = {"star": "Deep Sky", "moon": "Lunar", "sun": "Solar",
-                           "scenery": "Scenery", "planet": "Planetary"}
-            st.metric("Mode", mode_labels.get(mode, mode.title()),
-                      help=f"Raw mode: {mode}")
+            mode_labels = {
+                "star": "Deep Sky",
+                "moon": "Lunar",
+                "sun": "Solar",
+                "scenery": "Scenery",
+                "planet": "Planetary",
+            }
+            st.metric("Mode", mode_labels.get(mode, mode.title()), help=f"Raw mode: {mode}")
 
         with col_stage:
             stage_labels = {
@@ -338,12 +401,14 @@ def _render_view_state(alpaca):
                 "AutoGoto": "Slewing",
                 "3PPA": "Plate Solving",
             }
-            st.metric("Stage", stage_labels.get(stage, stage),
-                      help=f"Raw stage: {stage}")
+            st.metric("Stage", stage_labels.get(stage, stage), help=f"Raw stage: {stage}")
 
         with col_target:
-            st.metric("Target", target if target != "unknown" else "Manual",
-                      help="Named target from catalog or 'Manual' for custom coordinates")
+            st.metric(
+                "Target",
+                target if target != "unknown" else "Manual",
+                help="Named target from catalog or 'Manual' for custom coordinates",
+            )
 
         # Extra detail row
         col_gain, col_filter, col_fps, col_elapsed = st.columns(4)
@@ -353,8 +418,7 @@ def _render_view_state(alpaca):
                 st.metric("Session Gain", gain)
 
         with col_filter:
-            st.metric("LP Filter", "ON" if lp_filter else "OFF",
-                      help="Light pollution filter")
+            st.metric("LP Filter", "ON" if lp_filter else "OFF", help="Light pollution filter")
 
         with col_fps:
             # Get FPS from the active stage data

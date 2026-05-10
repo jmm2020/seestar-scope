@@ -4,6 +4,7 @@ Displays live status from ALPACA client with auto-refresh.
 Shows telescope position (RA/Dec, Alt/Az), camera state/temperature, focuser position.
 Updates every 2 seconds using st.rerun() for real-time monitoring.
 """
+
 import os
 import streamlit as st
 import requests
@@ -24,7 +25,9 @@ def render_live_status(alpaca):
     # Check backend connectivity
     backend_healthy = check_backend_health()
     if not backend_healthy:
-        st.warning(f"⚠️ Backend API is not reachable at {BACKEND_URL}. Live WebSocket connection count unavailable.")
+        st.warning(
+            f"⚠️ Backend API is not reachable at {BACKEND_URL}. Live WebSocket connection count unavailable."
+        )
 
     # Auto-refresh controls
     col1, col2 = st.columns([3, 1])

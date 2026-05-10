@@ -1,4 +1,5 @@
 """Camera control, live view stream, and stacking controls page."""
+
 import os
 import time
 
@@ -29,6 +30,7 @@ MODE_LABELS = {
 
 # --- Live View ---
 
+
 def _render_live_view(alpaca):
     """Embed the MJPEG stream from seestar_alp."""
     st.subheader("Live View")
@@ -49,6 +51,7 @@ def _render_live_view(alpaca):
 
 # --- Session Status ---
 
+
 def _render_session_status(alpaca):
     """Show live stacking/view state with optional auto-poll."""
     st.subheader("Session Status")
@@ -57,9 +60,12 @@ def _render_session_status(alpaca):
     with col_btn:
         st.button("Update Status", key="btn_update_status", use_container_width=True)
     with col_auto:
-        auto_poll = st.checkbox("Auto-poll (5s)", key="auto_poll_status",
-                                help="Automatically refresh status every 5 seconds. "
-                                     "Does NOT interrupt the live stream.")
+        auto_poll = st.checkbox(
+            "Auto-poll (5s)",
+            key="auto_poll_status",
+            help="Automatically refresh status every 5 seconds. "
+            "Does NOT interrupt the live stream.",
+        )
 
     view_data = alpaca.get_view_state()
     if not view_data:
@@ -122,6 +128,7 @@ def _render_session_status(alpaca):
 
 # --- Stacking Controls ---
 
+
 def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = True):
     """Gain, exposure, LP filter, and start/stop/restart buttons; disabled when alp_available is False."""
     st.subheader("Stacking Controls")
@@ -130,36 +137,51 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
 
     col_gain, col_exp, col_lp = st.columns(3)
     with col_gain:
-        gain = st.slider("Stack Gain", 0, 400, value=int(current_gain),
-                          step=1, key="stack_gain")
+        gain = st.slider("Stack Gain", 0, 400, value=int(current_gain), step=1, key="stack_gain")
     with col_exp:
-        st.number_input("Exposure (ms)", min_value=1000, max_value=30000,
-                        value=10000, step=1000, key="stack_exp")
+        st.number_input(
+            "Exposure (ms)",
+            min_value=1000,
+            max_value=30000,
+            value=10000,
+            step=1000,
+            key="stack_exp",
+        )
     with col_lp:
         lp_on = view.get("lp_filter", False) if view else False
         lp_filter = st.checkbox("LP Filter", value=lp_on, key="stack_lp")
 
     col_start, col_stop, col_restart = st.columns(3)
     with col_start:
-        if st.button("Start Stack", type="primary",
-                     disabled=is_stacking or not alp_available,
-                     use_container_width=True, key="btn_start_stack"):
+        if st.button(
+            "Start Stack",
+            type="primary",
+            disabled=is_stacking or not alp_available,
+            use_container_width=True,
+            key="btn_start_stack",
+        ):
             with st.spinner("Starting stack..."):
                 alpaca.start_stack(restart=False, gain=gain)
                 if lp_filter != lp_on:
                     alpaca.set_stack_lp_filter(lp_filter)
             st.rerun()
     with col_stop:
-        if st.button("Stop Stack",
-                     disabled=not is_stacking or not alp_available,
-                     use_container_width=True, key="btn_stop_stack"):
+        if st.button(
+            "Stop Stack",
+            disabled=not is_stacking or not alp_available,
+            use_container_width=True,
+            key="btn_stop_stack",
+        ):
             with st.spinner("Stopping..."):
                 alpaca.stop_stack()
             st.rerun()
     with col_restart:
-        if st.button("Restart Stack", disabled=not alp_available,
-                     use_container_width=True,
-                     key="btn_restart_stack"):
+        if st.button(
+            "Restart Stack",
+            disabled=not alp_available,
+            use_container_width=True,
+            key="btn_restart_stack",
+        ):
             with st.spinner("Restarting stack..."):
                 alpaca.stop_stack()
                 time.sleep(1)
@@ -170,13 +192,17 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
 
     # Apply gain change if user adjusted slider while stacking
     if is_stacking:
-        if st.button("Apply Gain", key="btn_apply_stack_gain",
-                     help="Send current slider value to the Seestar without restarting"):
+        if st.button(
+            "Apply Gain",
+            key="btn_apply_stack_gain",
+            help="Send current slider value to the Seestar without restarting",
+        ):
             alpaca.set_stack_gain(gain)
             st.success(f"Gain set to {gain}")
 
 
 # --- Stack Settings (Expander) ---
+
 
 def _render_stack_settings(alpaca):
     """Expandable panel for stack processing options and dither."""
@@ -190,40 +216,57 @@ def _render_stack_settings(alpaca):
         st.caption("Processing Options")
         c1, c2, c3 = st.columns(3)
         with c1:
-            dbe = st.checkbox("DBE (Background Extraction)",
-                              value=stack_cfg.get("dbe", True), key="opt_dbe")
-            star_corr = st.checkbox("Star Correction",
-                                    value=stack_cfg.get("star_correction", True),
-                                    key="opt_star_corr")
+            dbe = st.checkbox(
+                "DBE (Background Extraction)", value=stack_cfg.get("dbe", True), key="opt_dbe"
+            )
+            star_corr = st.checkbox(
+                "Star Correction", value=stack_cfg.get("star_correction", True), key="opt_star_corr"
+            )
         with c2:
-            airplane = st.checkbox("Airplane Removal",
-                                   value=stack_cfg.get("airplane_line_removal", False),
-                                   key="opt_airplane")
-            drizzle = st.checkbox("Drizzle 2x",
-                                  value=stack_cfg.get("drizzle2x", False),
-                                  key="opt_drizzle")
+            airplane = st.checkbox(
+                "Airplane Removal",
+                value=stack_cfg.get("airplane_line_removal", False),
+                key="opt_airplane",
+            )
+            drizzle = st.checkbox(
+                "Drizzle 2x", value=stack_cfg.get("drizzle2x", False), key="opt_drizzle"
+            )
         with c3:
-            save_ok = st.checkbox("Save OK Frames",
-                                  value=stack_cfg.get("save_discrete_ok_frame", True),
-                                  key="opt_save_ok")
-            save_all = st.checkbox("Save All Frames",
-                                   value=stack_cfg.get("save_discrete_frame", False),
-                                   key="opt_save_all")
+            save_ok = st.checkbox(
+                "Save OK Frames",
+                value=stack_cfg.get("save_discrete_ok_frame", True),
+                key="opt_save_ok",
+            )
+            save_all = st.checkbox(
+                "Save All Frames",
+                value=stack_cfg.get("save_discrete_frame", False),
+                key="opt_save_all",
+            )
 
         st.caption("Dither Settings")
         cd1, cd2, cd3 = st.columns(3)
         with cd1:
-            dither_en = st.checkbox("Enable Dither",
-                                    value=dither_cfg.get("enable", True),
-                                    key="opt_dither_en")
+            dither_en = st.checkbox(
+                "Enable Dither", value=dither_cfg.get("enable", True), key="opt_dither_en"
+            )
         with cd2:
-            dither_pix = st.number_input("Dither Pixels", min_value=10, max_value=500,
-                                         value=dither_cfg.get("pix", 100), step=10,
-                                         key="opt_dither_pix")
+            dither_pix = st.number_input(
+                "Dither Pixels",
+                min_value=10,
+                max_value=500,
+                value=dither_cfg.get("pix", 100),
+                step=10,
+                key="opt_dither_pix",
+            )
         with cd3:
-            dither_int = st.number_input("Dither Interval", min_value=1, max_value=50,
-                                         value=dither_cfg.get("interval", 5), step=1,
-                                         key="opt_dither_int")
+            dither_int = st.number_input(
+                "Dither Interval",
+                min_value=1,
+                max_value=50,
+                value=dither_cfg.get("interval", 5),
+                step=1,
+                key="opt_dither_int",
+            )
 
         if st.button("Apply Settings", use_container_width=True, key="btn_apply_settings"):
             with st.spinner("Applying..."):
@@ -259,23 +302,32 @@ def _render_camera_status(alpaca):
 
         col_state, col_gain, col_filter = st.columns(3)
         with col_state:
-            st.metric("Camera State", state_text,
-                      help="Idle = ready, Exposing = capturing light, "
-                           "Reading = transferring from sensor, Error = problem detected")
+            st.metric(
+                "Camera State",
+                state_text,
+                help="Idle = ready, Exposing = capturing light, "
+                "Reading = transferring from sensor, Error = problem detected",
+            )
         with col_gain:
-            st.metric("Current Gain", gain if gain is not None else "N/A",
-                      help="Sony IMX462 sensor gain (0-400). Higher = brighter "
-                           "but noisier.")
+            st.metric(
+                "Current Gain",
+                gain if gain is not None else "N/A",
+                help="Sony IMX462 sensor gain (0-400). Higher = brighter but noisier.",
+            )
         with col_filter:
             try:
                 names = alpaca.get_filter_names()
                 pos = alpaca.get_filter_position()
-                current = names[pos] if names and pos is not None and pos < len(names) else "Unknown"
+                current = (
+                    names[pos] if names and pos is not None and pos < len(names) else "Unknown"
+                )
             except Exception:
                 current = "N/A"
-            st.metric("Filter", current,
-                      help="Active filter: Dark = no filter, "
-                           "IR = infrared cut, LP = light pollution")
+            st.metric(
+                "Filter",
+                current,
+                help="Active filter: Dark = no filter, IR = infrared cut, LP = light pollution",
+            )
 
         return state_code
     except Exception as e:
@@ -284,6 +336,7 @@ def _render_camera_status(alpaca):
 
 
 # --- Single Frame Capture (existing) ---
+
 
 def _render_exposure_controls(alpaca):
     """Exposure time, gain, and filter controls."""
@@ -315,15 +368,17 @@ def _render_exposure_controls(alpaca):
     with col_exp:
         exposure = st.number_input(
             "Exposure (seconds)",
-            min_value=0.001, max_value=2000.0,
+            min_value=0.001,
+            max_value=2000.0,
             value=st.session_state.get("img_exposure", 10.0),
-            step=1.0, format="%.3f", key="exposure_input",
+            step=1.0,
+            format="%.3f",
+            key="exposure_input",
         )
         st.session_state["img_exposure"] = exposure
 
     with col_gain:
-        gain = st.slider("Gain", min_value=0, max_value=400, step=1,
-                          key="gain_slider")
+        gain = st.slider("Gain", min_value=0, max_value=400, step=1, key="gain_slider")
         if st.button("Set Gain", key="apply_gain", use_container_width=True):
             resp = alpaca.set_gain(gain)
             if resp.success:
@@ -355,8 +410,7 @@ def _render_capture_controls(alpaca, exposure):
     col_cap, col_abort, col_loop = st.columns([2, 1, 2])
 
     with col_cap:
-        if st.button("Capture", type="primary", use_container_width=True,
-                      key="btn_capture"):
+        if st.button("Capture", type="primary", use_container_width=True, key="btn_capture"):
             resp = alpaca.start_exposure(exposure, light=True)
             if resp.success:
                 st.session_state["exposing"] = True
@@ -379,9 +433,12 @@ def _render_capture_controls(alpaca, exposure):
         loop_enabled = st.checkbox("Loop Mode", key="loop_mode")
         if loop_enabled:
             frame_count = st.number_input(
-                "Frames", min_value=1, max_value=999,
+                "Frames",
+                min_value=1,
+                max_value=999,
                 value=st.session_state.get("loop_frames", 10),
-                step=1, key="frame_count_input",
+                step=1,
+                key="frame_count_input",
             )
             st.session_state["loop_frames"] = frame_count
             completed = st.session_state.get("loop_completed", 0)
@@ -429,9 +486,7 @@ def _poll_exposure(alpaca):
 def _check_postprocessing_health() -> bool:
     """Probe the FastAPI postprocessing endpoint."""
     try:
-        return requests.get(
-            f"{BACKEND_URL}/api/postprocessing/health", timeout=2
-        ).ok
+        return requests.get(f"{BACKEND_URL}/api/postprocessing/health", timeout=2).ok
     except Exception:
         return False
 
@@ -487,35 +542,54 @@ def _render_enhancement_panel(image):
         col_d, col_b, col_sp = st.columns(3)
         with col_d:
             ghs_D = st.slider(
-                "D (stretch factor)", 0.0, 20.0,
+                "D (stretch factor)",
+                0.0,
+                20.0,
                 preset.get("ghs_D", 5.0) if preset else 5.0,
-                step=0.5, key="ghs_D",
+                step=0.5,
+                key="ghs_D",
                 help="Stretch intensity. 0=none, 5=moderate, 15=extreme.",
             )
         with col_b:
             ghs_b = st.slider(
-                "b (bias)", 0.01, 1.0,
+                "b (bias)",
+                0.01,
+                1.0,
                 preset.get("ghs_b", 0.25) if preset else 0.25,
-                step=0.01, key="ghs_b",
+                step=0.01,
+                key="ghs_b",
                 help="Controls where stretch is concentrated.",
             )
         with col_sp:
             ghs_SP = st.slider(
-                "SP (symmetry)", 0.0, 1.0,
+                "SP (symmetry)",
+                0.0,
+                1.0,
                 preset.get("ghs_SP", 0.0) if preset else 0.0,
-                step=0.01, key="ghs_SP",
+                step=0.01,
+                key="ghs_SP",
                 help="Focus point of the stretch.",
             )
         stretch_params = {"D": ghs_D, "b": ghs_b, "SP": ghs_SP}
     elif stretch_choice == "arcsinh":
         arcsinh_scale = st.slider(
-            "Scale", 1.0, 100.0, 10.0, step=1.0, key="arcsinh_scale",
+            "Scale",
+            1.0,
+            100.0,
+            10.0,
+            step=1.0,
+            key="arcsinh_scale",
             help="Stretch intensity. Higher = more compression of brights.",
         )
         stretch_params = {"scale": arcsinh_scale}
     elif stretch_choice == "clahe":
         clahe_clip = st.slider(
-            "CLAHE Clip Limit", 0.5, 10.0, 2.0, step=0.5, key="clahe_clip",
+            "CLAHE Clip Limit",
+            0.5,
+            10.0,
+            2.0,
+            step=0.5,
+            key="clahe_clip",
             help="Contrast limit. Higher = more enhancement but may add noise.",
         )
         stretch_params = {"clip_limit": clahe_clip}
@@ -529,27 +603,33 @@ def _render_enhancement_panel(image):
         bg_sub = st.checkbox(
             "Background Subtraction",
             value=preset.get("background_sub", False) if preset else False,
-            key="enhance_bg_sub", disabled=not is_custom,
+            key="enhance_bg_sub",
+            disabled=not is_custom,
             help="Remove light pollution gradient using sep.",
         )
         hot_px = st.checkbox(
             "Hot Pixel Removal",
             value=preset.get("hot_pixel", False) if preset else False,
-            key="enhance_hot_pixel", disabled=not is_custom,
+            key="enhance_hot_pixel",
+            disabled=not is_custom,
             help="Remove hot pixels / cosmic rays.",
         )
     with col2:
         denoise = st.checkbox(
             "Noise Reduction",
             value=preset.get("denoise", False) if preset else False,
-            key="enhance_denoise", disabled=not is_custom,
+            key="enhance_denoise",
+            disabled=not is_custom,
             help="Non-Local Means denoising (OpenCV).",
         )
         if denoise:
             denoise_str = st.slider(
-                "Strength", 3, 21,
+                "Strength",
+                3,
+                21,
                 preset.get("denoise_strength", 7) if preset else 7,
-                step=2, key="enhance_denoise_str",
+                step=2,
+                key="enhance_denoise_str",
                 help="3=mild, 7=moderate, 15=strong, 21=very strong.",
             )
         else:
@@ -558,20 +638,27 @@ def _render_enhancement_panel(image):
         sharpen = st.checkbox(
             "Sharpening",
             value=preset.get("sharpen", False) if preset else False,
-            key="enhance_sharpen", disabled=not is_custom,
+            key="enhance_sharpen",
+            disabled=not is_custom,
             help="Unsharp mask sharpening.",
         )
         if sharpen:
             sharp_amt = st.slider(
-                "Amount", 0.5, 5.0,
+                "Amount",
+                0.5,
+                5.0,
                 preset.get("sharpen_amount", 1.0) if preset else 1.0,
-                step=0.5, key="enhance_sharp_amt",
+                step=0.5,
+                key="enhance_sharp_amt",
                 help="0.5=subtle, 1.0=moderate, 2.5=strong.",
             )
             sharp_rad = st.slider(
-                "Radius", 0.5, 5.0,
+                "Radius",
+                0.5,
+                5.0,
                 preset.get("sharpen_radius", 1.5) if preset else 1.5,
-                step=0.5, key="enhance_sharp_rad",
+                step=0.5,
+                key="enhance_sharp_rad",
                 help="Smaller=fine detail, larger=broader features.",
             )
         else:
@@ -580,7 +667,8 @@ def _render_enhancement_panel(image):
     color_bal = st.checkbox(
         "Color Balance",
         value=preset.get("color_balance", False) if preset else False,
-        key="enhance_color_bal", disabled=not is_custom,
+        key="enhance_color_bal",
+        disabled=not is_custom,
         help="Gray world white balance correction.",
     )
 
@@ -671,6 +759,7 @@ def _render_comparison(original, enhanced):
     elif mode == "Slider Overlay":
         try:
             from streamlit_image_comparison import image_comparison
+
             image_comparison(
                 img1=original,
                 img2=enhanced,
@@ -720,9 +809,7 @@ def _render_preview_and_save(alpaca, config):
         return
 
     if not _check_postprocessing_health():
-        st.warning(
-            "⚠️ Post-processing backend unreachable — running enhancement locally only."
-        )
+        st.warning("⚠️ Post-processing backend unreachable — running enhancement locally only.")
 
     st.subheader("Preview")
     enhanced = _render_enhancement_panel(image)
@@ -746,7 +833,9 @@ def _render_preview_and_save(alpaca, config):
         st.write("")
         st.write("")
         if st.button(
-            "Save Enhanced", type="primary", key="btn_save_enh",
+            "Save Enhanced",
+            type="primary",
+            key="btn_save_enh",
             use_container_width=True,
         ):
             save_dir = getattr(config, "save_directory", "./captures")
@@ -762,7 +851,9 @@ def _render_preview_and_save(alpaca, config):
         save_dir = getattr(config, "save_directory", "./captures")
         loop_target = st.session_state.get("slewing_target", "loop")
         filepath = save_image(
-            enhanced, f"{loop_target}_frame{completed}", save_dir=save_dir,
+            enhanced,
+            f"{loop_target}_frame{completed}",
+            save_dir=save_dir,
         )
         st.caption(f"Auto-saved frame {completed}: {filepath}")
 
@@ -779,16 +870,14 @@ def _render_preview_and_save(alpaca, config):
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error(
-                    f"Loop capture failed on frame {completed + 1}: "
-                    f"{resp.error_message}"
-                )
+                st.error(f"Loop capture failed on frame {completed + 1}: {resp.error_message}")
         else:
             st.success(f"Loop complete: {completed} frames captured")
             st.session_state["loop_completed"] = 0
 
 
 # --- Main Page ---
+
 
 def render_imaging(alpaca, config):
     """Render the camera imaging page."""

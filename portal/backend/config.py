@@ -1,36 +1,39 @@
 """Backend configuration"""
+
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
+
 class Settings(BaseSettings):
     """Backend settings"""
-    
+
     # App
     app_name: str = "SeestarScope Backend"
     debug: bool = True
     port: int = 8503
-    
+
     # Seestar telescope
     seestar_ip: str = "192.168.0.132"
     seestar_port: int = 32323
     auto_connect: bool = True
-    
+
     # Stellarium
     stellarium_host: str = "localhost"
     stellarium_port: int = 8091
-    
+
     # Storage paths (relative to backend/)
     data_dir: Path = Path("../data")
     captures_dir: Path = data_dir / "captures"
     gallery_dir: Path = data_dir / "gallery"
     processing_dir: Path = data_dir / "processing"
     calibration_dir: Path = data_dir / "calibration"
-    
+
     # Siril
     siril_cli_path: str = "siril-cli"
-    
+
     class Config:
         env_file = ".env"
+
 
 settings = Settings()
 

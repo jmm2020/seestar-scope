@@ -60,8 +60,10 @@ processing_jobs: Dict[str, PostprocessingResult] = {}
 # Pydantic models
 # --------------------------------------------------------------------------
 
+
 class PostprocessingRequest(BaseModel):
     """Pipeline parameters for a single apply call."""
+
     image_path: str = Field(..., description="Path to source image (PNG or FITS)")
     stretch: str = Field("stf", description="Stretch algorithm key")
     stretch_params: Dict[str, Any] = Field(default_factory=dict)
@@ -80,6 +82,7 @@ class PostprocessingRequest(BaseModel):
 
 class PostprocessingJobResponse(BaseModel):
     """Status snapshot of a processing job."""
+
     job_id: str
     status: str  # "pending" | "running" | "completed" | "failed"
     success: Optional[bool] = None
@@ -105,6 +108,7 @@ class CalibrationInfoResponse(BaseModel):
 # Background task helpers
 # --------------------------------------------------------------------------
 
+
 def _request_to_params(req: PostprocessingRequest) -> Dict[str, Any]:
     return {
         "stretch": req.stretch,
@@ -123,16 +127,20 @@ def _request_to_params(req: PostprocessingRequest) -> Dict[str, Any]:
     }
 
 
-async def _run_pipeline_task(job_id: str, image_path: str,
-                             params: Dict[str, Any]) -> None:
+async def _run_pipeline_task(job_id: str, image_path: str, params: Dict[str, Any]) -> None:
     """Background runner. Stores PostprocessingResult in processing_jobs."""
     service = get_service()
     processing_jobs[job_id] = PostprocessingResult(
-        success=False, error_message=None, job_id=job_id,
+        success=False,
+        error_message=None,
+        job_id=job_id,
     )
     try:
         result = await asyncio.to_thread(
-            service.apply_pipeline, image_path, params, job_id,
+            service.apply_pipeline,
+            image_path,
+            params,
+            job_id,
         )
     except Exception as exc:  # safety net
         logger.error("Postprocessing background task failed: %s", exc, exc_info=True)
@@ -145,8 +153,9 @@ async def _run_pipeline_task(job_id: str, image_path: str,
     processing_jobs[job_id] = result
 
 
-def _result_to_response(job_id: str,
-                        result: Optional[PostprocessingResult]) -> PostprocessingJobResponse:
+def _result_to_response(
+    job_id: str, result: Optional[PostprocessingResult]
+) -> PostprocessingJobResponse:
     if result is None:
         return PostprocessingJobResponse(job_id=job_id, status="unknown")
     if result.completed_at is None:
@@ -171,6 +180,7 @@ def _result_to_response(job_id: str,
 # Endpoints
 # --------------------------------------------------------------------------
 
+
 @router.get("/health")
 async def health_check():
     """Report health of the postprocessing service and its deps."""
@@ -192,7 +202,9 @@ async def apply_postprocessing(
     job_id = f"pp_{uuid.uuid4().hex[:8]}"
     params = _request_to_params(req)
     processing_jobs[job_id] = PostprocessingResult(
-        success=False, error_message=None, job_id=job_id,
+        success=False,
+        error_message=None,
+        job_id=job_id,
     )
     background_tasks.add_task(_run_pipeline_task, job_id, req.image_path, params)
     return {"job_id": job_id, "status": "started"}

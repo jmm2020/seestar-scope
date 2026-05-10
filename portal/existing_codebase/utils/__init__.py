@@ -1,4 +1,5 @@
 """SeestarScope utilities."""
+
 from .coordinates import (
     ra_degrees_to_hours,
     ra_hours_to_degrees,

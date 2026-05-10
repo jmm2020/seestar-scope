@@ -1,4 +1,5 @@
 """Tests for StellariumClient - no live Stellarium required."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -9,6 +10,7 @@ from clients.stellarium_client import StellariumClient, StellariumObject
 
 
 # --- StellariumObject tests ---
+
 
 def test_stellarium_object_creation():
     obj = StellariumObject(
@@ -50,6 +52,7 @@ def test_stellarium_object_below_horizon():
 
 # --- StellariumClient construction ---
 
+
 def test_client_default_construction():
     client = StellariumClient()
     assert client.base_url == "http://localhost:8091"
@@ -64,6 +67,7 @@ def test_client_custom_construction():
 
 # --- Mocked HTTP tests ---
 
+
 def test_is_available_true():
     client = StellariumClient()
     mock_resp = MagicMock()
@@ -75,6 +79,7 @@ def test_is_available_true():
 def test_is_available_false():
     client = StellariumClient()
     import requests
+
     with patch.object(client.session, "get", side_effect=requests.exceptions.ConnectionError()):
         assert client.is_available() is False
 

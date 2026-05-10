@@ -34,6 +34,7 @@ VALID_FRAME_TYPES = ("dark", "flat", "bias")
 @dataclass
 class CalibrationFrames:
     """Paths to master calibration frames on disk (None when not uploaded)."""
+
     dark_path: Optional[str] = None
     flat_path: Optional[str] = None
     bias_path: Optional[str] = None
@@ -42,6 +43,7 @@ class CalibrationFrames:
 @dataclass
 class PostprocessingResult:
     """Result of one apply_pipeline() invocation."""
+
     success: bool
     output_path: Optional[str] = None
     error_message: Optional[str] = None
@@ -142,8 +144,9 @@ class PostprocessingService:
     # Pipeline execution
     # ------------------------------------------------------------------
 
-    def apply_pipeline(self, image_path: str, params: Dict[str, Any],
-                       job_id: Optional[str] = None) -> PostprocessingResult:
+    def apply_pipeline(
+        self, image_path: str, params: Dict[str, Any], job_id: Optional[str] = None
+    ) -> PostprocessingResult:
         """Run the enhancement pipeline against ``image_path`` and persist output."""
         start = datetime.utcnow()
         job_id = job_id or f"pp_{uuid.uuid4().hex[:8]}"
@@ -250,22 +253,19 @@ class PostprocessingService:
         if bias is not None and bias.shape == result.shape:
             result = result - bias
         elif bias is not None:
-            logger.warning("Bias frame shape %s != image %s; skipping",
-                           bias.shape, result.shape)
+            logger.warning("Bias frame shape %s != image %s; skipping", bias.shape, result.shape)
 
         if dark is not None and dark.shape == result.shape:
             result = result - dark
         elif dark is not None:
-            logger.warning("Dark frame shape %s != image %s; skipping",
-                           dark.shape, result.shape)
+            logger.warning("Dark frame shape %s != image %s; skipping", dark.shape, result.shape)
 
         if flat is not None and flat.shape == result.shape:
             flat_norm = flat / max(float(np.mean(flat)), 1e-10)
             flat_norm = np.where(flat_norm < 1e-3, 1.0, flat_norm)
             result = result / flat_norm
         elif flat is not None:
-            logger.warning("Flat frame shape %s != image %s; skipping",
-                           flat.shape, result.shape)
+            logger.warning("Flat frame shape %s != image %s; skipping", flat.shape, result.shape)
 
         return np.clip(result, 0.0, 1.0)
 
@@ -282,6 +282,7 @@ class PostprocessingService:
         try:
             if suffix in (".fits", ".fit", ".fts"):
                 from astropy.io import fits  # local import - heavy dep
+
                 with fits.open(str(path)) as hdul:
                     data = np.asarray(hdul[0].data, dtype=np.float64)
                 if data.size == 0:
@@ -298,8 +299,7 @@ class PostprocessingService:
                 img.load()
                 return np.array(img, dtype=np.float64) / 255.0
         except Exception as exc:
-            logger.error("Failed to load master %s at %s: %s",
-                         frame_type, path, exc, exc_info=True)
+            logger.error("Failed to load master %s at %s: %s", frame_type, path, exc, exc_info=True)
             return None
 
     # ------------------------------------------------------------------

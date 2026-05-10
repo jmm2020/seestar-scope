@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/status", tags=["status"])
 
 class MessageType(str, Enum):
     """WebSocket message types"""
+
     TELESCOPE_STATUS = "telescope_status"
     PROCESSING_STATUS = "processing_status"
     HEARTBEAT = "heartbeat"
@@ -45,11 +46,14 @@ class ConnectionManager:
         logger.info(f"WebSocket client connected. Total clients: {len(self.active_connections)}")
 
         # Send welcome message
-        await self.send_personal_message({
-            "type": MessageType.CONNECTED,
-            "timestamp": datetime.utcnow().isoformat(),
-            "message": "Connected to Seestar status stream"
-        }, websocket)
+        await self.send_personal_message(
+            {
+                "type": MessageType.CONNECTED,
+                "timestamp": datetime.utcnow().isoformat(),
+                "message": "Connected to Seestar status stream",
+            },
+            websocket,
+        )
 
     async def disconnect(self, websocket: WebSocket) -> None:
         """Remove a WebSocket connection"""
@@ -126,20 +130,20 @@ async def telescope_status_broadcaster(request: Request) -> None:
                         "dec": telescope_status.get("dec"),
                         "altitude": telescope_status.get("altitude"),
                         "azimuth": telescope_status.get("azimuth"),
-                        "at_park": telescope_status.get("at_park", False)
+                        "at_park": telescope_status.get("at_park", False),
                     },
                     "camera": {
                         "state": camera_status.get("state", "unknown"),
                         "temperature": camera_status.get("temperature"),
                         "cooler_on": camera_status.get("cooler_on", False),
-                        "gain": camera_status.get("gain")
+                        "gain": camera_status.get("gain"),
                     },
                     "focuser": {
                         "position": focuser_status.get("position"),
                         "is_moving": focuser_status.get("is_moving", False),
-                        "temperature": focuser_status.get("temperature")
-                    }
-                }
+                        "temperature": focuser_status.get("temperature"),
+                    },
+                },
             }
 
             # Broadcast to all clients
@@ -148,11 +152,13 @@ async def telescope_status_broadcaster(request: Request) -> None:
         except Exception as e:
             logger.error(f"Telescope status broadcast error: {e}")
             # Broadcast error to clients
-            await manager.broadcast({
-                "type": MessageType.ERROR,
-                "timestamp": datetime.utcnow().isoformat(),
-                "error": str(e)
-            })
+            await manager.broadcast(
+                {
+                    "type": MessageType.ERROR,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "error": str(e),
+                }
+            )
 
         # Poll every 2 seconds
         await asyncio.sleep(2.0)
@@ -182,8 +188,8 @@ async def processing_status_broadcaster(request: Request) -> None:
                             "output_fits": str(result.output_path) if result.output_path else None,
                             "output_jpeg": str(result.jpeg_path) if result.jpeg_path else None,
                             "error_message": result.error_message,
-                            "stats": result.stats
-                        }
+                            "stats": result.stats,
+                        },
                     }
 
                     await manager.broadcast(message)
@@ -202,10 +208,9 @@ async def heartbeat_sender() -> None:
         await asyncio.sleep(30.0)  # Heartbeat every 30 seconds
 
         try:
-            await manager.broadcast({
-                "type": MessageType.HEARTBEAT,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            await manager.broadcast(
+                {"type": MessageType.HEARTBEAT, "timestamp": datetime.utcnow().isoformat()}
+            )
         except Exception as e:
             logger.error(f"Heartbeat error: {e}")
 
@@ -326,29 +331,30 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
 
                 # Handle client commands
                 if message.get("command") == "ping":
-                    await manager.send_personal_message({
-                        "type": "pong",
-                        "timestamp": datetime.utcnow().isoformat()
-                    }, websocket)
+                    await manager.send_personal_message(
+                        {"type": "pong", "timestamp": datetime.utcnow().isoformat()}, websocket
+                    )
 
                 elif message.get("command") == "subscribe":
                     # Future enhancement: selective subscription
-                    await manager.send_personal_message({
-                        "type": "subscribed",
-                        "channels": message.get("channels", ["all"])
-                    }, websocket)
+                    await manager.send_personal_message(
+                        {"type": "subscribed", "channels": message.get("channels", ["all"])},
+                        websocket,
+                    )
 
                 else:
-                    await manager.send_personal_message({
-                        "type": MessageType.ERROR,
-                        "error": f"Unknown command: {message.get('command')}"
-                    }, websocket)
+                    await manager.send_personal_message(
+                        {
+                            "type": MessageType.ERROR,
+                            "error": f"Unknown command: {message.get('command')}",
+                        },
+                        websocket,
+                    )
 
             except json.JSONDecodeError:
-                await manager.send_personal_message({
-                    "type": MessageType.ERROR,
-                    "error": "Invalid JSON"
-                }, websocket)
+                await manager.send_personal_message(
+                    {"type": MessageType.ERROR, "error": "Invalid JSON"}, websocket
+                )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected normally")
@@ -374,5 +380,5 @@ async def get_active_connections():
     """
     return {
         "active_connections": len(manager.active_connections),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }

@@ -1,4 +1,5 @@
 """Observation session logging to JSONL files."""
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -23,8 +24,17 @@ class SessionLogger:
     def log_target_slew(self, target_name: str, ra: float, dec: float):
         self._write_event("target_slew", target_name=target_name, ra=ra, dec=dec)
 
-    def log_exposure_taken(self, target: str, exposure_s: float, gain: int, filter_name: str, filename: str):
-        self._write_event("exposure_taken", target=target, exposure_s=exposure_s, gain=gain, filter_name=filter_name, filename=filename)
+    def log_exposure_taken(
+        self, target: str, exposure_s: float, gain: int, filter_name: str, filename: str
+    ):
+        self._write_event(
+            "exposure_taken",
+            target=target,
+            exposure_s=exposure_s,
+            gain=gain,
+            filter_name=filter_name,
+            filename=filename,
+        )
 
     def log_sequence_complete(self, targets: list, total_frames: int):
         self._write_event("sequence_complete", targets=targets, total_frames=total_frames)
@@ -39,7 +49,21 @@ class SessionLogger:
         filepath = self.sessions_dir / f"session_{date_str}.jsonl"
         if not filepath.exists():
             return {"error": "Session not found"}
-        events = [json.loads(line) for line in filepath.read_text().strip().split("\n") if line.strip()]
-        targets = list(set(e.get("target_name", e.get("target", "")) for e in events if e["event"] in ("target_slew", "exposure_taken") and (e.get("target_name") or e.get("target"))))
+        events = [
+            json.loads(line) for line in filepath.read_text().strip().split("\n") if line.strip()
+        ]
+        targets = list(
+            set(
+                e.get("target_name", e.get("target", ""))
+                for e in events
+                if e["event"] in ("target_slew", "exposure_taken")
+                and (e.get("target_name") or e.get("target"))
+            )
+        )
         exposures = [e for e in events if e["event"] == "exposure_taken"]
-        return {"date": date_str, "total_events": len(events), "targets_observed": targets, "total_exposures": len(exposures)}
+        return {
+            "date": date_str,
+            "total_events": len(events),
+            "targets_observed": targets,
+            "total_exposures": len(exposures),
+        }

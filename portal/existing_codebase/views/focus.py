@@ -1,4 +1,5 @@
 """Focuser control page."""
+
 import streamlit as st
 
 
@@ -20,24 +21,36 @@ def render_focus(alpaca):
     col_pos, col_temp = st.columns(2)
     with col_pos:
         pos_str = f"{current_pos} / {max_step}" if current_pos is not None else "N/A"
-        st.metric("Current Position", pos_str,
-                  help=f"Focuser step position (range: 0\u2013{max_step}). "
-                       f"0 = lens closest to sensor (infinity focus direction), "
-                       f"{max_step} = lens furthest out. Best star focus is "
-                       f"typically in the lower-to-middle range.")
+        st.metric(
+            "Current Position",
+            pos_str,
+            help=f"Focuser step position (range: 0\u2013{max_step}). "
+            f"0 = lens closest to sensor (infinity focus direction), "
+            f"{max_step} = lens furthest out. Best star focus is "
+            f"typically in the lower-to-middle range.",
+        )
     with col_temp:
-        temp_str = f"{temperature:.1f}\u00b0C / {temperature * 9/5 + 32:.1f}\u00b0F" if temperature is not None else "N/A"
-        st.metric("Temperature", temp_str,
-                  help="Focuser/sensor temperature. Focus drifts as temperature changes "
-                       "\u2014 re-focus if temp shifts more than 2-3\u00b0C.")
+        temp_str = (
+            f"{temperature:.1f}\u00b0C / {temperature * 9 / 5 + 32:.1f}\u00b0F"
+            if temperature is not None
+            else "N/A"
+        )
+        st.metric(
+            "Temperature",
+            temp_str,
+            help="Focuser/sensor temperature. Focus drifts as temperature changes "
+            "\u2014 re-focus if temp shifts more than 2-3\u00b0C.",
+        )
 
     st.divider()
 
     # Step buttons for fine/coarse adjustment
     st.subheader("Step Adjustment")
-    st.caption("Fine (\u00b110) for dialing in sharp focus, coarse (\u00b1100) for large moves. "
-               "Point at a bright star, take short exposures, and adjust until the star "
-               "is the smallest, sharpest pinpoint.")
+    st.caption(
+        "Fine (\u00b110) for dialing in sharp focus, coarse (\u00b1100) for large moves. "
+        "Point at a bright star, take short exposures, and adjust until the star "
+        "is the smallest, sharpest pinpoint."
+    )
     cols = st.columns([1, 1, 1, 1, 2])
 
     if current_pos is not None:
@@ -86,8 +99,8 @@ def render_focus(alpaca):
             value=current_pos if current_pos is not None else 0,
             step=10,
             help=f"Absolute focuser step position (0\u2013{max_step}). "
-                 f"If you know your best focus from a previous session, "
-                 f"enter it here to return quickly.",
+            f"If you know your best focus from a previous session, "
+            f"enter it here to return quickly.",
         )
     with col_btn:
         st.write("")  # spacing to align with input

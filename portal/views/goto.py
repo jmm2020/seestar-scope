@@ -1,4 +1,5 @@
 """GoTo/Slew control page with Stellarium integration and catalog search."""
+
 import streamlit as st
 import requests
 import time
@@ -16,8 +17,7 @@ logger = logging.getLogger(__name__)
 # and inside Docker containers where ALP runs as a separate service on the
 # compose network (ALP_HOST=seestar-alp, ALP_PORT=5555).
 SEESTAR_ALP_URL = (
-    f"http://{os.environ.get('ALP_HOST', 'localhost')}"
-    f":{os.environ.get('ALP_PORT', '5555')}"
+    f"http://{os.environ.get('ALP_HOST', 'localhost')}:{os.environ.get('ALP_PORT', '5555')}"
 )
 
 
@@ -116,28 +116,33 @@ def _render_current_position(alpaca):
         if status["ra"] is not None:
             col_ra, col_dec, col_track, col_status = st.columns(4)
             with col_ra:
-                st.metric("RA", format_ra(status["ra"]),
-                          help="Right Ascension in J2000 epoch (hours:min:sec)")
+                st.metric(
+                    "RA",
+                    format_ra(status["ra"]),
+                    help="Right Ascension in J2000 epoch (hours:min:sec)",
+                )
             with col_dec:
-                st.metric("Dec", format_dec(status["dec"]),
-                          help="Declination in J2000 epoch (degrees:arcmin:arcsec)")
+                st.metric(
+                    "Dec",
+                    format_dec(status["dec"]),
+                    help="Declination in J2000 epoch (degrees:arcmin:arcsec)",
+                )
             with col_track:
-                st.metric("Tracking", "ON" if status["tracking"] else "OFF",
-                          help="Sidereal tracking compensates for Earth's rotation "
-                               "to keep objects centered")
+                st.metric(
+                    "Tracking",
+                    "ON" if status["tracking"] else "OFF",
+                    help="Sidereal tracking compensates for Earth's rotation "
+                    "to keep objects centered",
+                )
             with col_status:
                 if status["slewing"]:
-                    st.metric("Status", "SLEWING",
-                              help="Telescope is moving to a new target")
+                    st.metric("Status", "SLEWING", help="Telescope is moving to a new target")
                 elif status["at_park"]:
-                    st.metric("Status", "PARKED",
-                              help="Telescope is in its safe park position")
+                    st.metric("Status", "PARKED", help="Telescope is in its safe park position")
                 elif status["at_home"]:
-                    st.metric("Status", "HOME",
-                              help="Telescope is at its home reference position")
+                    st.metric("Status", "HOME", help="Telescope is at its home reference position")
                 else:
-                    st.metric("Status", "Ready",
-                              help="Telescope is idle and ready for commands")
+                    st.metric("Status", "Ready", help="Telescope is idle and ready for commands")
         else:
             st.warning("Telescope not responding")
     except Exception as e:
@@ -165,8 +170,7 @@ def _render_manual_input(alpaca):
     with col_btn:
         st.write("")  # spacing
         st.write("")
-        slew_manual = st.button("Slew", type="primary", key="slew_manual",
-                                use_container_width=True)
+        slew_manual = st.button("Slew", type="primary", key="slew_manual", use_container_width=True)
 
     if slew_manual and ra_text and dec_text:
         try:
@@ -203,20 +207,24 @@ def _render_stellarium_panel(alpaca, stellarium):
         st.markdown(f"Dec: {format_dec(obj.dec_j2000_degrees)}")
     with col_btn:
         if obj.above_horizon:
-            if st.button("Slew", type="primary", key="slew_stellarium",
-                         use_container_width=True):
-                _slew_and_report(alpaca, obj.ra_j2000_hours,
-                                 obj.dec_j2000_degrees, obj.name)
+            if st.button("Slew", type="primary", key="slew_stellarium", use_container_width=True):
+                _slew_and_report(alpaca, obj.ra_j2000_hours, obj.dec_j2000_degrees, obj.name)
         else:
-            st.button("Below horizon", disabled=True, key="slew_stellarium_disabled",
-                       use_container_width=True)
+            st.button(
+                "Below horizon",
+                disabled=True,
+                key="slew_stellarium_disabled",
+                use_container_width=True,
+            )
             st.caption(f"Alt: {obj.altitude:.1f}")
 
 
 def _render_object_search(alpaca, stellarium):
     """Named object search - Messier catalog first, then Stellarium fallback."""
     st.subheader("Object Search")
-    st.caption("Search the built-in Messier catalog first, then falls back to Stellarium's database.")
+    st.caption(
+        "Search the built-in Messier catalog first, then falls back to Stellarium's database."
+    )
     col_search, col_btn = st.columns([4, 1])
     with col_search:
         query = st.text_input(
@@ -224,8 +232,8 @@ def _render_object_search(alpaca, stellarium):
             placeholder="M42, Orion Nebula, NGC 7000...",
             key="object_search",
             help="Enter a Messier ID (M42), common name (Orion Nebula), "
-                 "or object type (galaxy, nebula). Searches the built-in "
-                 "Messier catalog, then Stellarium if available.",
+            "or object type (galaxy, nebula). Searches the built-in "
+            "Messier catalog, then Stellarium if available.",
         )
     with col_btn:
         st.write("")
@@ -236,15 +244,21 @@ def _render_object_search(alpaca, stellarium):
         # Try Messier catalog first (exact lookup)
         messier_obj = lookup_messier(query)
         if messier_obj:
-            st.success(f"Found: **{messier_obj['id']}** - {messier_obj['common_name']} "
-                       f"({messier_obj['object_type']})")
-            st.write(f"RA: {format_ra(messier_obj['ra_hours'])} | "
-                     f"Dec: {format_dec(messier_obj['dec_degrees'])}")
-            if st.button(f"Slew to {messier_obj['id']}", type="primary",
-                         key="slew_search_exact"):
-                _slew_and_report(alpaca, messier_obj["ra_hours"],
-                                 messier_obj["dec_degrees"],
-                                 f"{messier_obj['id']} {messier_obj['common_name']}")
+            st.success(
+                f"Found: **{messier_obj['id']}** - {messier_obj['common_name']} "
+                f"({messier_obj['object_type']})"
+            )
+            st.write(
+                f"RA: {format_ra(messier_obj['ra_hours'])} | "
+                f"Dec: {format_dec(messier_obj['dec_degrees'])}"
+            )
+            if st.button(f"Slew to {messier_obj['id']}", type="primary", key="slew_search_exact"):
+                _slew_and_report(
+                    alpaca,
+                    messier_obj["ra_hours"],
+                    messier_obj["dec_degrees"],
+                    f"{messier_obj['id']} {messier_obj['common_name']}",
+                )
             return
 
         # Try Messier catalog name search
@@ -254,31 +268,42 @@ def _render_object_search(alpaca, stellarium):
             for obj in catalog_results[:5]:
                 col_obj, col_slew = st.columns([4, 1])
                 with col_obj:
-                    st.write(f"**{obj['id']}** - {obj['common_name']} "
-                             f"({obj['object_type']}) | "
-                             f"RA {format_ra(obj['ra_hours'])} "
-                             f"Dec {format_dec(obj['dec_degrees'])}")
+                    st.write(
+                        f"**{obj['id']}** - {obj['common_name']} "
+                        f"({obj['object_type']}) | "
+                        f"RA {format_ra(obj['ra_hours'])} "
+                        f"Dec {format_dec(obj['dec_degrees'])}"
+                    )
                 with col_slew:
                     if st.button("Slew", key=f"slew_cat_{obj['id']}"):
-                        _slew_and_report(alpaca, obj["ra_hours"],
-                                         obj["dec_degrees"],
-                                         f"{obj['id']} {obj['common_name']}")
+                        _slew_and_report(
+                            alpaca,
+                            obj["ra_hours"],
+                            obj["dec_degrees"],
+                            f"{obj['id']} {obj['common_name']}",
+                        )
             return
 
         # Fallback to Stellarium lookup
         if stellarium.is_available():
             stel_obj = stellarium.lookup_object(query)
             if stel_obj:
-                st.success(f"Found in Stellarium: **{stel_obj.name}** "
-                           f"({stel_obj.object_type})")
-                st.write(f"RA: {format_ra(stel_obj.ra_j2000_hours)} | "
-                         f"Dec: {format_dec(stel_obj.dec_j2000_degrees)} | "
-                         f"Alt: {stel_obj.altitude:.1f}")
+                st.success(f"Found in Stellarium: **{stel_obj.name}** ({stel_obj.object_type})")
+                st.write(
+                    f"RA: {format_ra(stel_obj.ra_j2000_hours)} | "
+                    f"Dec: {format_dec(stel_obj.dec_j2000_degrees)} | "
+                    f"Alt: {stel_obj.altitude:.1f}"
+                )
                 if stel_obj.above_horizon:
-                    if st.button(f"Slew to {stel_obj.name}", type="primary",
-                                 key="slew_search_stel"):
-                        _slew_and_report(alpaca, stel_obj.ra_j2000_hours,
-                                         stel_obj.dec_j2000_degrees, stel_obj.name)
+                    if st.button(
+                        f"Slew to {stel_obj.name}", type="primary", key="slew_search_stel"
+                    ):
+                        _slew_and_report(
+                            alpaca,
+                            stel_obj.ra_j2000_hours,
+                            stel_obj.dec_j2000_degrees,
+                            stel_obj.name,
+                        )
                 else:
                     st.warning(f"{stel_obj.name} is below the horizon")
                 return
@@ -299,20 +324,21 @@ def _render_quick_targets(alpaca):
                 break
             mid, name = QUICK_TARGETS[idx]
             with col:
-                if st.button(f"{mid}\n{name}", key=f"quick_{mid}",
-                             use_container_width=True):
+                if st.button(f"{mid}\n{name}", key=f"quick_{mid}", use_container_width=True):
                     obj = lookup_messier(mid)
                     if obj:
-                        _slew_and_report(alpaca, obj["ra_hours"],
-                                         obj["dec_degrees"],
-                                         f"{mid} {name}")
+                        _slew_and_report(
+                            alpaca, obj["ra_hours"], obj["dec_degrees"], f"{mid} {name}"
+                        )
 
 
 def _render_mount_controls(alpaca):
     """Open, Park, Stop, and Tracking controls."""
     st.subheader("Mount Controls")
-    st.caption("Open sends a slew to unfold the arm. Park attempts to close it "
-               "(firmware-dependent). Tracking compensates for Earth's rotation.")
+    st.caption(
+        "Open sends a slew to unfold the arm. Park attempts to close it "
+        "(firmware-dependent). Tracking compensates for Earth's rotation."
+    )
     alp_up = _check_alp_reachable()
     if not alp_up:
         st.warning(
@@ -321,41 +347,51 @@ def _render_mount_controls(alpaca):
         )
     col_open, col_park, col_stop, col_track = st.columns(4)
     with col_open:
-        if st.button("Open Scope", type="primary", use_container_width=True,
-                     disabled=not alp_up,
-                     help="Wake the Seestar into operational mode "
-                          "(iscope_start_view, mode=star) and unfold the arm. "
-                          "Required before any slew — the scope rejects movement "
-                          "commands while in HOME state with 'fail to operate'."):
+        if st.button(
+            "Open Scope",
+            type="primary",
+            use_container_width=True,
+            disabled=not alp_up,
+            help="Wake the Seestar into operational mode "
+            "(iscope_start_view, mode=star) and unfold the arm. "
+            "Required before any slew — the scope rejects movement "
+            "commands while in HOME state with 'fail to operate'.",
+        ):
             result = _seestar_action(
                 "iscope_start_view",
                 params={"params": {"mode": "star"}},
             )
             if result["success"]:
-                st.success("Open command sent — arm is unfolding "
-                           "(give it 10-15 seconds, then refresh Dashboard)")
+                st.success(
+                    "Open command sent — arm is unfolding "
+                    "(give it 10-15 seconds, then refresh Dashboard)"
+                )
                 time.sleep(2)
                 st.rerun()
             else:
                 st.error(f"Open failed: {result['error']}")
     with col_park:
-        if st.button("Park (Close)", use_container_width=True,
-                     disabled=not alp_up,
-                     help="Attempt to fold/close the telescope arm via scope_park. "
-                          "Note: may not work on all firmware versions. "
-                          "Use the Seestar app to park if this doesn't respond."):
+        if st.button(
+            "Park (Close)",
+            use_container_width=True,
+            disabled=not alp_up,
+            help="Attempt to fold/close the telescope arm via scope_park. "
+            "Note: may not work on all firmware versions. "
+            "Use the Seestar app to park if this doesn't respond.",
+        ):
             result = _seestar_action("scope_park")
             if result["success"]:
                 st.success("Park command sent — check if arm is closing")
             else:
                 st.error(f"Park failed: {result['error']}")
     with col_stop:
-        if st.button("Stop Slew", use_container_width=True,
-                     disabled=not alp_up,
-                     help="Abort the current slew and stop the telescope. "
-                          "Uses the stop_goto_target action."):
-            result = _seestar_action("iscope_stop_view",
-                                     params={"stage": "AutoGoto"})
+        if st.button(
+            "Stop Slew",
+            use_container_width=True,
+            disabled=not alp_up,
+            help="Abort the current slew and stop the telescope. Uses the stop_goto_target action.",
+        ):
+            result = _seestar_action("iscope_stop_view", params={"stage": "AutoGoto"})
             if result["success"]:
                 st.success("Stop command sent")
                 time.sleep(1)
@@ -369,9 +405,12 @@ def _render_mount_controls(alpaca):
         except Exception:
             tracking = False
         label = "Tracking OFF" if tracking else "Tracking ON"
-        if st.button(label, use_container_width=True,
-                     help="Toggle sidereal tracking on/off. Tracking compensates "
-                          "for Earth's rotation to keep objects centered."):
+        if st.button(
+            label,
+            use_container_width=True,
+            help="Toggle sidereal tracking on/off. Tracking compensates "
+            "for Earth's rotation to keep objects centered.",
+        ):
             resp = alpaca.set_tracking(not tracking)
             if resp.success:
                 st.success(f"Tracking {'enabled' if not tracking else 'disabled'}")
