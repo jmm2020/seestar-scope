@@ -9,13 +9,19 @@ Browser
   │
   ▼
 ┌─────────────────────────────────────────────┐
-│  portal (Streamlit)  :8502                           │
-│  UI — control, imaging, sequences, GoTo, conditions  │
+│  portal (Streamlit)  :8502                                       │
+│  UI — control, imaging, live-stack, sequences, GoTo, conditions  │
 └──────────────────┬──────────────────────────┘
                    │ ASCOM ALPACA REST
                    ▼
 ┌─────────────────────────────────────────────┐
-│  ALP backend  :8503                         │
+│  portal backend  :8503  (FastAPI)           │
+│  REST + WebSocket — status, stacking, jobs  │
+└──────────────────┬──────────────────────────┘
+                   │ ASCOM ALPACA REST
+                   ▼
+┌─────────────────────────────────────────────┐
+│  ALP backend  :5555                         │
 │  vendor/seestar_alp — device + scheduler    │
 └──────────────────┬──────────────────────────┘
                    │ TCP (proprietary Seestar protocol)
@@ -27,7 +33,8 @@ Browser
 | Service | Port | Notes |
 |---------|------|-------|
 | portal (Streamlit) | 8502 | Main control UI |
-| ALP backend | 8503 | ASCOM ALPACA proxy to S50 |
+| portal backend (FastAPI) | 8503 | REST + WebSocket; published to host for browser WS |
+| ALP backend | 5555 | ASCOM ALPACA proxy to S50 |
 | seestar-enhance | 8504 | AI post-stack (GraXpert + StarNet++) — UCIS-v1 service |
 
 ## Quick Start — Docker Compose

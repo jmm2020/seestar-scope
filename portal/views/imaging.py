@@ -22,6 +22,12 @@ MODE_LABELS = {
     "planet": "Planetary",
 }
 
+try:
+    from backend.config import settings as _backend_settings
+    BACKEND_PORT = _backend_settings.port  # sourced from config.py / .env
+except Exception:
+    BACKEND_PORT = 8503
+
 
 # --- Live View ---
 
@@ -121,6 +127,124 @@ def _render_session_status(alpaca):
     return view, is_stacking
 
 
+# --- Live Stack Panel ---
+
+
+def _render_live_stack_panel():
+    """Live stack progress panel — metrics update via WebSocket without page reruns.
+
+    Embeds an inline JS WebSocket listener that updates DOM elements directly.
+    """
+    st.subheader("Live Stack Progress")
+
+    st.html(f"""
+    <div id="lsp-container" style="background:#0d1117;border:1px solid #30363d;
+                                   border-radius:8px;padding:20px;margin:4px 0;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
+                    text-align:center;font-family:monospace;">
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">Frames</div>
+                <div id="lsp-frames"
+                     style="color:#3fb950;font-size:2em;font-weight:700;">0</div>
+            </div>
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">SNR Gain</div>
+                <div id="lsp-snr"
+                     style="color:#58a6ff;font-size:2em;font-weight:700;">1.0x</div>
+            </div>
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">Elapsed</div>
+                <div id="lsp-elapsed"
+                     style="color:#d29922;font-size:2em;font-weight:700;">0m 0s</div>
+            </div>
+            <div>
+                <div style="color:#8b949e;font-size:0.7em;text-transform:uppercase;
+                             letter-spacing:0.08em;margin-bottom:4px;">Target</div>
+                <div id="lsp-target"
+                     style="color:#bc8cff;font-size:1.3em;font-weight:700;">—</div>
+            </div>
+        </div>
+        <div id="lsp-status"
+             style="color:#484f58;font-size:0.7em;text-align:right;margin-top:12px;">
+            Connecting to status stream…
+        </div>
+    </div>
+
+    <script>
+    (function() {{
+        var PORT = {BACKEND_PORT};
+        var wsUrl = 'ws://' + window.location.hostname + ':' + PORT + '/api/status/ws';
+        var restUrl = 'http://' + window.location.hostname + ':' + PORT + '/api/status/live-stack';
+        var ws = null;
+        var retryDelay = 1000;
+
+        function fmtElapsed(s) {{
+            return Math.floor(s / 60) + 'm ' + Math.floor(s % 60) + 's';
+        }}
+
+        function updateUI(data) {{
+            var framesEl = document.getElementById('lsp-frames');
+            if (!framesEl) return;  // DOM not ready / Streamlit rerender
+            var fc = data.frame_count || 0;
+            framesEl.textContent = fc;
+            document.getElementById('lsp-snr').textContent =
+                data.snr_estimate ? data.snr_estimate.toFixed(1) + 'x' : '1.0x';
+            document.getElementById('lsp-elapsed').textContent =
+                data.elapsed_s ? fmtElapsed(data.elapsed_s) : '0m 0s';
+            document.getElementById('lsp-target').textContent = data.target || '—';
+            var el = document.getElementById('lsp-status');
+            el.textContent = '● Live  ' + new Date().toLocaleTimeString();
+            el.style.color = '#3fb950';
+        }}
+
+        function setStatus(msg, color) {{
+            var el = document.getElementById('lsp-status');
+            if (el) {{ el.textContent = msg; el.style.color = color || '#484f58'; }}
+        }}
+
+        function connect() {{
+            ws = new WebSocket(wsUrl);
+            ws.onopen = function() {{
+                setStatus('Connected', '#58a6ff');
+                retryDelay = 1000;
+            }};
+            ws.onmessage = function(e) {{
+                try {{
+                    var msg = JSON.parse(e.data);
+                    if (msg.type === 'stack_progress' && msg.data) {{
+                        updateUI(msg.data);
+                    }}
+                }} catch(err) {{
+                    console.error('[lsp] onmessage error:', err);
+                }}
+            }};
+            var hadError = false;
+            ws.onerror = function() {{
+                hadError = true;
+            }};
+            ws.onclose = function() {{
+                setStatus(hadError ? 'Stream error — reconnecting…' : 'Reconnecting…', '#d29922');
+                hadError = false;
+                setTimeout(connect, Math.min(retryDelay, 30000));
+                retryDelay = Math.min(retryDelay * 2, 30000);
+            }};
+        }}
+
+        // Fetch last known state immediately for reconnect recovery
+        fetch(restUrl)
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{ if (d.state && d.state.frame_count) updateUI(d.state); }})
+            .catch(function(err) {{ console.warn('[lsp] pre-fetch failed:', err); }});
+
+        connect();
+    }})();
+    </script>
+    """)
+
+
 # --- Stacking Controls ---
 
 
@@ -194,6 +318,41 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
         ):
             alpaca.set_stack_gain(gain)
             st.success(f"Gain set to {gain}")
+
+    # Reject & Restart — discard contaminated sub-stack and start fresh
+    if is_stacking and alp_available:
+        st.divider()
+        col_rej, col_rej_help = st.columns([1, 3])
+        with col_rej:
+            if st.button(
+                "Reject & Restart",
+                type="secondary",
+                use_container_width=True,
+                key="btn_reject_frame",
+                help="Discard current sub-stack and restart fresh from zero.",
+            ):
+                with st.spinner("Restarting stack…"):
+                    try:
+                        stop_resp = alpaca.stop_stack()
+                        time.sleep(1)
+                        start_resp = alpaca.start_stack(restart=True, gain=gain)
+                    except Exception as exc:
+                        st.error(f"Reject & Restart failed: {exc}")
+                        st.rerun()
+                        st.stop()
+                if stop_resp.success and start_resp.success:
+                    st.success("Stack restarted — accumulating fresh frames from this point.")
+                else:
+                    st.error(
+                        f"Reject failed: stop={'OK' if stop_resp.success else stop_resp.error_message}"
+                        f", start={'OK' if start_resp.success else start_resp.error_message}"
+                    )
+                st.rerun()
+        with col_rej_help:
+            st.caption(
+                "Use when clouds or an aircraft contaminate the current sub-stack. "
+                "This discards accumulated data and starts counting from frame 1 again."
+            )
 
 
 # --- Stack Settings (Expander) ---
@@ -574,6 +733,9 @@ def render_imaging(alpaca, config):
 
     # Session status with auto-poll
     view, is_stacking = _render_session_status(alpaca)
+
+    if is_stacking:
+        _render_live_stack_panel()
 
     st.divider()
 
