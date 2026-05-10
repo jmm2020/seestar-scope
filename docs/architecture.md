@@ -89,6 +89,7 @@ The FastAPI backend (`seestar-portal-backend`, port `:8503`) handles all persist
 | `routers/conditions.py` | Observing conditions — `/api/conditions/current` + `/api/conditions/forecast` |
 | `routers/status_ws.py` | WebSocket status stream + `/api/status/connections` REST endpoint |
 | `routers/telescope.py` | Full ALPACA bridge — `/api/telescope/*` (telescope, camera, focuser, filter, dew-heater, Stellarium passthrough) |
+| `routers/stacking.py` | Stacking session pipeline — `POST /api/stacking/{start,add-frame,process,abort}`, `GET /api/stacking/{status,config}` |
 | `routers/processing.py` | Legacy Siril processing pipeline — `/api/processing/*`; imports `app/services/siril_service.py` |
 | `services/postprocessing_service.py` | Enhancement pipeline: calibration frame management + `apply_pipeline()` |
 | `services/autofocus_service.py` | Autofocus algorithm service |
