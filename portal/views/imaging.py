@@ -22,6 +22,8 @@ MODE_LABELS = {
     "planet": "Planetary",
 }
 
+BACKEND_PORT = 8503  # FastAPI backend WebSocket/REST port
+
 
 # --- Live View ---
 
@@ -131,8 +133,6 @@ def _render_live_stack_panel():
     Backend port 8503 is the FastAPI WebSocket server.
     """
     st.subheader("Live Stack Progress")
-
-    BACKEND_PORT = 8503  # FastAPI backend port
 
     st.html(f"""
     <div id="lsp-container" style="background:#0d1117;border:1px solid #30363d;
@@ -323,10 +323,16 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
                 help="Discard current sub-stack and restart fresh from zero.",
             ):
                 with st.spinner("Restarting stack…"):
-                    alpaca.stop_stack()
+                    stop_resp = alpaca.stop_stack()
                     time.sleep(1)
-                    alpaca.start_stack(restart=True, gain=gain)
-                st.warning("Stack restarted — accumulating fresh frames from this point.")
+                    start_resp = alpaca.start_stack(restart=True, gain=gain)
+                if stop_resp.success and start_resp.success:
+                    st.success("Stack restarted — accumulating fresh frames from this point.")
+                else:
+                    st.error(
+                        f"Reject failed: stop={'OK' if stop_resp.success else stop_resp.error_message}"
+                        f", start={'OK' if start_resp.success else start_resp.error_message}"
+                    )
                 st.rerun()
         with col_rej_help:
             st.caption(

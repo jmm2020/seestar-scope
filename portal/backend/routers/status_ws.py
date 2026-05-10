@@ -10,7 +10,7 @@ from typing import Dict, Set
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class ConnectionManager:
         await self.send_personal_message(
             {
                 "type": MessageType.CONNECTED,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "message": "Connected to Seestar status stream",
             },
             websocket,
@@ -121,7 +121,7 @@ async def telescope_status_broadcaster(request: Request) -> None:
             # Build status message
             message = {
                 "type": MessageType.TELESCOPE_STATUS,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": {
                     "telescope": {
                         "connected": telescope_status.get("connected", False),
@@ -156,7 +156,7 @@ async def telescope_status_broadcaster(request: Request) -> None:
             await manager.broadcast(
                 {
                     "type": MessageType.ERROR,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "error": str(e),
                 }
             )
@@ -182,7 +182,7 @@ async def processing_status_broadcaster(request: Request) -> None:
                 if last_states.get(session_id) != current_state:
                     message = {
                         "type": MessageType.PROCESSING_STATUS,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "data": {
                             "session_id": session_id,
                             "status": current_state,
@@ -210,7 +210,7 @@ async def heartbeat_sender() -> None:
 
         try:
             await manager.broadcast(
-                {"type": MessageType.HEARTBEAT, "timestamp": datetime.utcnow().isoformat()}
+                {"type": MessageType.HEARTBEAT, "timestamp": datetime.now(timezone.utc).isoformat()}
             )
         except Exception as e:
             logger.error(f"Heartbeat error: {e}")
@@ -251,7 +251,7 @@ async def stack_progress_broadcaster(request: Request) -> None:
                     await manager.broadcast(
                         {
                             "type": MessageType.STACK_PROGRESS,
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                             "data": state,
                         }
                     )
@@ -362,7 +362,7 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
         await manager.send_personal_message(
             {
                 "type": MessageType.STACK_PROGRESS,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": live_stack,
             },
             websocket,
@@ -394,7 +394,8 @@ async def websocket_endpoint(websocket: WebSocket, request: Request):
                 # Handle client commands
                 if message.get("command") == "ping":
                     await manager.send_personal_message(
-                        {"type": "pong", "timestamp": datetime.utcnow().isoformat()}, websocket
+                        {"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()},
+                        websocket,
                     )
 
                 elif message.get("command") == "subscribe":
@@ -442,7 +443,7 @@ async def get_active_connections():
     """
     return {
         "active_connections": len(manager.active_connections),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -455,6 +456,6 @@ async def get_live_stack_state(request: Request):
     """
     state = getattr(request.app.state, "live_stack_state", {})
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "state": state,
     }
