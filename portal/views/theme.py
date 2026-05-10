@@ -8,6 +8,7 @@ NAV_ITEMS = {
     "Sky Map": "Sky Map",
     "GoTo": "GoTo / Slew",
     "Imaging": "Imaging",
+    "Stacking": "Stacking",
     "Focus": "Focus",
     "Autofocus": "Autofocus",
     "Plate Solve": "Plate Solve",
@@ -22,6 +23,7 @@ NAV_ICONS = {
     "Sky Map": "\U0001f30c",       # milky way
     "GoTo": "\u2b50",              # star
     "Imaging": "\U0001f4f7",       # camera
+    "Stacking": "\U0001f9f2",      # magnet (layers/stacking)
     "Focus": "\U0001f52d",         # telescope
     "Autofocus": "\U0001f3af",     # bullseye
     "Plate Solve": "\U0001f5fa\ufe0f", # world map
