@@ -115,6 +115,10 @@ elif page == "Imaging":
     from views.imaging import render_imaging
     render_imaging(alpaca, config)
 
+elif page == "Stacking":
+    from views.stacking import render_stacking
+    render_stacking(alpaca, config)
+
 elif page == "Focus":
     from views.focus import render_focus
     render_focus(alpaca)

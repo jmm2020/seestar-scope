@@ -50,6 +50,7 @@ The ALP backend talks to the S50 directly via TCP.
 | `views/dashboard.py` | Live status — 2 s auto-refresh |
 | `views/goto.py` | GoTo/Slew — manual coords, Stellarium, Messier/NGC catalog |
 | `views/imaging.py` | Camera control — exposure, gain, filter, loop mode |
+| `views/stacking.py` | Siril stacking session management UI (start/add-frame/process/abort) |
 | `views/focus.py` | Focuser position control |
 | `views/sequence.py` | Multi-target automated imaging sequences |
 | `views/settings.py` | App settings UI |
@@ -73,6 +74,57 @@ Key directories:
 | `docker/` | Docker configs |
 
 The ALP backend exposes an ASCOM ALPACA REST API on `:8503`.
+
+## Stacking Service
+
+The portal backend exposes a session-oriented Siril stacking pipeline at
+`/api/stacking/*`, implemented by `portal/backend/services/stacking_service.py`
+and routed via `portal/backend/routers/stacking.py`.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/stacking/start` | Begin a new stacking session (returns `session_id`) |
+| `GET /api/stacking/status` | Poll for `running`, `frame_count`, `progress`, `latest_result` |
+| `POST /api/stacking/add-frame` | Append a captured-frame path to the active session |
+| `POST /api/stacking/process` | Dispatch the Siril pipeline as a background task |
+| `POST /api/stacking/abort` | Request abort of an in-progress run |
+| `GET /api/stacking/config` | Default session configuration values |
+
+The pipeline converts the queued PNG/JPG frames to FITS, generates an SSF script
+(adding a `calibrate` block when dark/flat/bias paths are provided), invokes
+`siril-cli` via `asyncio.create_subprocess_exec`, and moves the stacked
+output (`<target>_<session>.fit` and `.jpg`) into `/data/seestar/gallery/` so
+it shows up in the existing Gallery page.
+
+**SIRIL_BIN env var override.** The Dockerfile installs `siril` via apt,
+which works on x86_64 and Ubuntu 22.04 aarch64 from the main repo (the
+`lock042/siril` PPA has a broken ARM64 build as of early 2026 — do not use it).
+For ARM64 hosts where apt-supplied Siril is unavailable, set `SIRIL_BIN` to a
+wrapper that invokes Flatpak Siril, e.g.
+`SIRIL_BIN="flatpak run --command=siril-cli org.siril.Siril"`. `SIRIL_TIMEOUT`
+(default 600 seconds) controls the asyncio timeout for the subprocess call.
+
+## Data Flow — Stacking Session
+
+```
+User (browser)
+  │ configure + click "Start Session"
+  ▼
+portal views/stacking.py
+  │ POST /api/stacking/start  →  session_id returned
+  │ POST /api/stacking/add-frame (× N — one per captured frame)
+  │ POST /api/stacking/process
+  ▼
+FastAPI BackgroundTasks
+  │ asyncio task: stacking_service.run_stacking()
+  │   1. Convert PNG/JPG frames → FITS
+  │   2. Generate SSF script (calibrate block if dark/flat/bias provided)
+  │   3. asyncio.create_subprocess_exec(siril-cli)
+  │   4. Move output → /data/seestar/gallery/
+  ▼
+portal views/stacking.py  ←  polls GET /api/stacking/status (2 s)
+  │ on success: latest_result.output_jpeg shown; gallery page picks up output
+```
 
 ## seestar-enhance Service
 
