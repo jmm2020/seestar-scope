@@ -22,7 +22,11 @@ SEESTAR_ALP_URL = (
 
 # Seconds to wait for a scope state transition after dispatching a command.
 # Increase if your scope is slow to respond (e.g. on a cold boot).
-VERIFY_TIMEOUT_S = int(os.environ.get("SCOPE_VERIFY_TIMEOUT", "15"))
+try:
+    VERIFY_TIMEOUT_S = int(os.environ.get("SCOPE_VERIFY_TIMEOUT", "15"))
+except ValueError:
+    logger.warning("SCOPE_VERIFY_TIMEOUT is not a valid integer; defaulting to 15s")
+    VERIFY_TIMEOUT_S = 15
 
 
 def _seestar_action(method: str, params: dict = None, async_mode: bool = True) -> dict:
@@ -75,6 +79,8 @@ def _poll_state_transition(alpaca, predicate, timeout_s: int = VERIFY_TIMEOUT_S)
 
     Returns True if the transition was observed, False on timeout.
     Polls every 1 second; each GET to the ALPACA bridge is fast (~50ms).
+    Exceptions from get_telescope_status() are caught and retried — a False
+    return therefore means either no transition or the bridge was unreachable.
     """
     deadline = time.time() + timeout_s
     while time.time() < deadline:
@@ -82,8 +88,8 @@ def _poll_state_transition(alpaca, predicate, timeout_s: int = VERIFY_TIMEOUT_S)
             status = alpaca.get_telescope_status()
             if predicate(status):
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("_poll_state_transition: status read failed: %s", exc)
         time.sleep(1)
     return False
 
@@ -389,7 +395,7 @@ def _render_mount_controls(alpaca):
                 with st.spinner(f"Waiting for scope to open (up to {VERIFY_TIMEOUT_S}s)..."):
                     transitioned = _poll_state_transition(
                         alpaca,
-                        lambda s: not s.get("at_park") and not s.get("at_home"),
+                        lambda s: s.get("at_park", True) is False and s.get("at_home", True) is False,
                     )
                 if transitioned:
                     st.success("Scope opened — arm is unfolded and ready.")
@@ -416,7 +422,7 @@ def _render_mount_controls(alpaca):
                 with st.spinner(f"Waiting for scope to park (up to {VERIFY_TIMEOUT_S}s)..."):
                     transitioned = _poll_state_transition(
                         alpaca,
-                        lambda s: s.get("at_park"),
+                        lambda s: s.get("at_park", False) is True,
                     )
                 if transitioned:
                     st.success("Scope parked — arm is closed.")
@@ -431,7 +437,7 @@ def _render_mount_controls(alpaca):
             "Stop Slew",
             use_container_width=True,
             disabled=not alp_up,
-            help="Abort the current slew and stop the telescope. Uses the stop_goto_target action.",
+            help="Abort the current slew and stop the telescope. Uses the iscope_stop_view (AutoGoto) action.",
         ):
             result = _seestar_action("iscope_stop_view", params={"stage": "AutoGoto"})
             if not result["success"]:
@@ -440,10 +446,10 @@ def _render_mount_controls(alpaca):
                 with st.spinner(f"Waiting for slew to stop (up to {VERIFY_TIMEOUT_S}s)..."):
                     transitioned = _poll_state_transition(
                         alpaca,
-                        lambda s: not s.get("slewing"),
+                        lambda s: s.get("slewing", True) is False,
                     )
                 if transitioned:
-                    st.success("Slew stopped.")
+                    st.success("Scope is not slewing.")
                     st.rerun()
                 else:
                     st.error(
@@ -475,15 +481,11 @@ def render_goto(alpaca, stellarium):
     """Render the GoTo/Slew control page."""
     st.header("\u2b50 GoTo / Slew Control")
 
-    # Current position at top
     _render_current_position(alpaca)
-
-    # Slewing progress indicator
     _render_slewing_progress(alpaca)
 
     st.divider()
 
-    # Two-column layout: Manual + Stellarium
     col_left, col_right = st.columns(2)
     with col_left:
         _render_manual_input(alpaca)
@@ -492,15 +494,12 @@ def render_goto(alpaca, stellarium):
 
     st.divider()
 
-    # Object search
     _render_object_search(alpaca, stellarium)
 
     st.divider()
 
-    # Quick targets grid
     _render_quick_targets(alpaca)
 
     st.divider()
 
-    # Mount controls
     _render_mount_controls(alpaca)
