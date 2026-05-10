@@ -25,6 +25,7 @@ jobs:
       - name: Install portal dependencies
         run: |
           pip install -r portal/requirements.txt
+          pip install -r portal/backend/requirements.txt
           pip install -r portal/requirements-dev.txt
 
       - name: Lint portal code

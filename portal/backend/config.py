@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     stellarium_host: str = "localhost"
     stellarium_port: int = 8091
 
+    # Observing site (lat/lon/elevation for astronomy + weather)
+    site_latitude: float = 37.12
+    site_longitude: float = -123.45
+    site_elevation_m: float = 0.0
+    site_name: str = "My Observatory"
+
     # Storage paths (relative to backend/)
     data_dir: Path = Path("../data")
     captures_dir: Path = data_dir / "captures"

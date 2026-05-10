@@ -41,6 +41,10 @@ class Config:
         return self._data.get("catalog", {})
 
     @property
+    def site(self) -> dict:
+        return self._data.get("site", {})
+
+    @property
     def seestar_ip(self) -> str:
         return os.environ.get("SEESTAR_IP", self.seestar.get("ip_address", "192.168.0.132"))
 
@@ -107,6 +111,22 @@ class Config:
     @property
     def use_stellarium_lookup(self) -> bool:
         return self.catalog.get("use_stellarium_lookup", True)
+
+    @property
+    def site_latitude(self) -> float:
+        return float(os.environ.get("SITE_LAT", self.site.get("latitude", 37.12)))
+
+    @property
+    def site_longitude(self) -> float:
+        return float(os.environ.get("SITE_LON", self.site.get("longitude", -123.45)))
+
+    @property
+    def site_elevation_m(self) -> float:
+        return float(os.environ.get("SITE_ELEVATION_M", self.site.get("elevation_m", 0.0)))
+
+    @property
+    def site_name(self) -> str:
+        return os.environ.get("SITE_NAME", self.site.get("name", "My Observatory"))
 
 
 def load_config(path: str | Path | None = None) -> Config:
