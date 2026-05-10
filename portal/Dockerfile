@@ -5,7 +5,7 @@ WORKDIR /app
 # System deps for OpenCV (libgl1, libglib2) and sep (gcc to compile C ext)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     gcc \
     && rm -rf /var/lib/apt/lists/*
