@@ -6,3 +6,12 @@ Pillow>=10.0.0
 astropy>=6.0.0
 toml>=0.10.2
 plotly>=5.18.0
+# Image enhancement pipeline (issue #17)
+scipy>=1.11.0
+scikit-image>=0.22.0
+opencv-python-headless>=4.9.0
+sep>=1.2.1
+photutils>=1.10.0
+astroalign>=2.5.1
+lacosmic>=1.1.0
+streamlit-image-comparison>=0.0.4

@@ -17,6 +17,7 @@ from backend.routers import (
     status_ws,
     autofocus,
     platesolve,
+    postprocessing,
     sessions,
     conditions,
     stacking,
@@ -97,6 +98,7 @@ app.include_router(gallery.router, prefix="/api/gallery", tags=["gallery"])
 app.include_router(processing.router, prefix="/api/processing", tags=["processing"])
 app.include_router(autofocus.router)  # prefix="/api/autofocus" defined in router
 app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in router
+app.include_router(postprocessing.router)  # prefix="/api/postprocessing" defined in router
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(conditions.router)  # prefix="/api/conditions" defined in router
 app.include_router(stacking.router)    # prefix="/api/stacking" defined in router
@@ -116,6 +118,7 @@ async def root():
             "processing": "/api/processing/*",
             "autofocus": "/api/autofocus/*",
             "platesolve": "/api/platesolve/*",
+            "postprocessing": "/api/postprocessing/*",
             "sessions": "/api/sessions/*",
             "conditions": "/api/conditions/*",
             "stacking": "/api/stacking/*",

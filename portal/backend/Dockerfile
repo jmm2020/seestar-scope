@@ -7,9 +7,13 @@ FROM python:3.11-slim
 #   docker run -e SIRIL_BIN="flatpak run --command=siril-cli org.siril.Siril" ...
 # shlex.split() in the service handles multi-word commands natively — no wrapper script needed.
 # Flatpak inside Docker requires --privileged and adds 200MB+, so we keep it as the override path only.
+# OpenCV+sep also need libgl1/libglib2/gcc.
 RUN apt-get update && apt-get install -y \
     curl \
     siril \
+    libgl1 \
+    libglib2.0-0 \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 # Default Siril CLI binary; override with SIRIL_BIN env var for ARM64/Flatpak.
@@ -27,6 +31,9 @@ COPY backend /app/backend
 
 # Copy existing_codebase for client imports
 COPY existing_codebase /app/existing_codebase
+
+# Copy shared utils so postprocessing_service can import utils.image_enhancement
+COPY utils /app/utils
 
 # Create data directories
 RUN mkdir -p /app/data /app/captures /app/siril_workdir

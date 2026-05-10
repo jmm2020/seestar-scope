@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     captures_dir: Path = data_dir / "captures"
     gallery_dir: Path = data_dir / "gallery"
     processing_dir: Path = data_dir / "processing"
+    calibration_dir: Path = data_dir / "calibration"
 
     # Siril
     siril_cli_path: str = "siril-cli"
@@ -46,3 +47,4 @@ settings = Settings()
 settings.captures_dir.mkdir(parents=True, exist_ok=True)
 settings.gallery_dir.mkdir(parents=True, exist_ok=True)
 settings.processing_dir.mkdir(parents=True, exist_ok=True)
+settings.calibration_dir.mkdir(parents=True, exist_ok=True)

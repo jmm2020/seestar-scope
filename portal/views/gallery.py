@@ -30,6 +30,10 @@ def render_gallery():
         st.code("cd backend && uvicorn main:app --host 0.0.0.0 --port 8503", language="bash")
         return
 
+    pp_healthy = check_postprocessing_health()
+    if not pp_healthy:
+        st.warning("⚠️ Post-processing service is unreachable — Process buttons disabled.")
+
     # Display gallery stats
     render_gallery_stats()
 
@@ -47,7 +51,7 @@ def render_gallery():
         return
 
     # Display image grid
-    render_image_grid(images)
+    render_image_grid(images, pp_healthy=pp_healthy)
 
 
 def check_backend_health() -> bool:
@@ -56,6 +60,21 @@ def check_backend_health() -> bool:
         response = requests.get(f"{BACKEND_URL}/health", timeout=2)
         return response.status_code == 200
     except Exception:
+        return False
+
+
+def check_postprocessing_health() -> bool:
+    """Check if the postprocessing endpoint is reachable and healthy."""
+    try:
+        return requests.get(f"{BACKEND_URL}/api/postprocessing/health", timeout=2).ok
+    except requests.exceptions.ConnectionError as exc:
+        logger.debug("Postprocessing health check: connection refused: %s", exc)
+        return False
+    except requests.exceptions.Timeout:
+        logger.debug("Postprocessing health check: timed out after 2s")
+        return False
+    except Exception as exc:
+        logger.debug("Postprocessing health check failed: %s", exc)
         return False
 
 
@@ -90,7 +109,7 @@ def render_gallery_stats():
                         st.caption(f"{target}: {count}")
 
     except Exception as e:
-        logger.error(f"Failed to fetch gallery stats: {e}")
+        logger.error("Failed to fetch gallery stats: %s", e, exc_info=True)
         st.warning("Could not load gallery statistics")
 
 
@@ -154,19 +173,19 @@ def fetch_images(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
 
         if response.status_code == 200:
             images = response.json()
-            logger.info(f"Fetched {len(images)} images from gallery")
+            logger.info("Fetched %d images from gallery", len(images))
             return images
         else:
             st.error(f"Failed to fetch images: {response.status_code}")
             return []
 
     except Exception as e:
-        logger.error(f"Error fetching images: {e}")
+        logger.error("Error fetching images: %s", e, exc_info=True)
         st.error(f"Error fetching images: {e}")
         return []
 
 
-def render_image_grid(images: List[Dict[str, Any]]):
+def render_image_grid(images: List[Dict[str, Any]], pp_healthy: bool = False):
     """Render images in a responsive grid."""
     st.markdown(f"### Showing {len(images)} images")
 
@@ -177,14 +196,27 @@ def render_image_grid(images: List[Dict[str, Any]]):
             img_idx = idx + col_idx
             if img_idx < len(images):
                 with col:
-                    render_image_card(images[img_idx])
+                    render_image_card(images[img_idx], pp_healthy=pp_healthy)
 
 
-def render_image_card(image: Dict[str, Any]):
+def render_image_card(image: Dict[str, Any], pp_healthy: bool = False):
     """Render a single image card with thumbnail and metadata."""
     with st.container():
-        # Image thumbnail
-        thumbnail_url = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
+        # Image thumbnail (or processed preview when toggled on)
+        if image.get("processed") and image.get("processed_path"):
+            show_processed = st.checkbox(
+                "Show Processed",
+                value=True,
+                key=f"show_proc_{image['id']}",
+            )
+            if show_processed:
+                thumbnail_url = (
+                    f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256&processed=true"
+                )
+            else:
+                thumbnail_url = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
+        else:
+            thumbnail_url = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
 
         try:
             st.image(thumbnail_url, use_container_width=True)
@@ -209,6 +241,33 @@ def render_image_card(image: Dict[str, Any]):
         with badge_cols[1]:
             if image.get("stacked"):
                 st.info("📚 Stacked", help="Part of stacked sequence")
+
+        # Process button (kicks off backend pipeline)
+        if pp_healthy:
+            if st.button("Process", key=f"process_{image['id']}"):
+                try:
+                    resp = requests.post(
+                        f"{BACKEND_URL}/api/postprocessing/apply",
+                        json={
+                            "image_path": image.get("png_path") or image.get("fits_path"),
+                            "stretch": "stf",
+                            "color_balance": True,
+                        },
+                        timeout=5,
+                    )
+                    if resp.ok:
+                        st.success(f"Processing started: job {resp.json().get('job_id')}")
+                    else:
+                        try:
+                            detail = resp.json().get("detail", resp.text)
+                        except Exception:
+                            detail = f"HTTP {resp.status_code}"
+                        logger.error("Processing request failed (HTTP %s): %s", resp.status_code, resp.text)
+                        st.error(f"Processing failed: {detail}")
+                except Exception as exc:
+                    st.error(f"Processing request failed: {exc}")
+        else:
+            st.caption("(post-processing offline)")
 
         # Session ID
         st.caption(f"Session: `{image['session_id']}`")

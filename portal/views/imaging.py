@@ -1,13 +1,18 @@
 """Camera control, live view stream, and stacking controls page."""
 
 import logging
-import streamlit as st
+import os
 import time
 
+import requests
+import streamlit as st
+
 from clients.sessions_client import SessionsClient
-from utils.image_processing import alpaca_imagearray_to_image, save_image, apply_stretch
+from utils.image_processing import alpaca_imagearray_to_image, save_image
 
 logger = logging.getLogger(__name__)
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://seestar-portal-backend:8503")
 
 # Stage labels (shared with dashboard)
 STAGE_LABELS = {
@@ -505,7 +510,8 @@ def _render_camera_status(alpaca):
                 current = (
                     names[pos] if names and pos is not None and pos < len(names) else "Unknown"
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("Filter status unavailable: %s", exc)
                 current = "N/A"
             st.metric(
                 "Filter",
@@ -638,7 +644,11 @@ def _poll_exposure(alpaca):
         cam = alpaca.get_camera_status()
         state_code = cam.get("state_code")
         state_text = cam.get("state", "Unknown")
-    except Exception:
+    except Exception as exc:
+        logger.debug("Camera poll failed during exposure: %s", exc)
+        st.warning("Camera connection lost during exposure — retrying...")
+        time.sleep(1)
+        st.rerun()
         return
 
     duration = st.session_state.get("exposure_duration", 10)
@@ -667,8 +677,314 @@ def _poll_exposure(alpaca):
         st.error("Camera reported an error during exposure")
 
 
+def _check_postprocessing_health() -> bool:
+    """Probe the FastAPI postprocessing endpoint."""
+    try:
+        return requests.get(f"{BACKEND_URL}/api/postprocessing/health", timeout=2).ok
+    except requests.exceptions.ConnectionError as exc:
+        logger.debug("Postprocessing health check: connection refused: %s", exc)
+        return False
+    except requests.exceptions.Timeout:
+        logger.debug("Postprocessing health check: timed out after 2s")
+        return False
+    except Exception as exc:
+        logger.debug("Postprocessing health check failed: %s", exc)
+        return False
+
+
+def _render_enhancement_panel(image):
+    """Render PixInsight-style controls and return the enhanced PIL image."""
+    from utils.image_enhancement import (
+        ENHANCEMENT_PRESETS,
+        STRETCH_LABELS,
+        detect_stars,
+        draw_star_overlay,
+        run_pipeline,
+    )
+
+    st.subheader("Image Enhancement")
+    st.caption("Apply PixInsight-style processing. Each step is optional and applied in order.")
+
+    preset_names = list(ENHANCEMENT_PRESETS.keys())
+    preset_choice = st.selectbox(
+        "Preset",
+        preset_names,
+        index=0,
+        key="enhance_preset",
+        help="Quick-apply common combinations. Choose 'Custom' for full manual control.",
+    )
+
+    preset = ENHANCEMENT_PRESETS.get(preset_choice)
+    is_custom = preset is None
+
+    stretch_keys = list(STRETCH_LABELS.keys())
+    if not is_custom and preset:
+        default_stretch_idx = stretch_keys.index(preset.get("stretch", "none"))
+    else:
+        default_stretch_idx = (
+            stretch_keys.index(st.session_state.get("enhance_stretch", "stf"))
+            if st.session_state.get("enhance_stretch") in stretch_keys
+            else 2
+        )
+
+    stretch_choice = st.radio(
+        "Stretch Method",
+        stretch_keys,
+        index=default_stretch_idx,
+        format_func=lambda k: STRETCH_LABELS[k],
+        key="enhance_stretch",
+        horizontal=True,
+        disabled=not is_custom,
+        help="How to map the linear image data to a visible brightness range.",
+    )
+
+    stretch_params: dict = {}
+    if stretch_choice == "ghs":
+        col_d, col_b, col_sp = st.columns(3)
+        with col_d:
+            ghs_D = st.slider(
+                "D (stretch factor)",
+                0.0,
+                20.0,
+                preset.get("ghs_D", 5.0) if preset else 5.0,
+                step=0.5,
+                key="ghs_D",
+                help="Stretch intensity. 0=none, 5=moderate, 15=extreme.",
+            )
+        with col_b:
+            ghs_b = st.slider(
+                "b (bias)",
+                0.01,
+                1.0,
+                preset.get("ghs_b", 0.25) if preset else 0.25,
+                step=0.01,
+                key="ghs_b",
+                help="Controls where stretch is concentrated.",
+            )
+        with col_sp:
+            ghs_SP = st.slider(
+                "SP (symmetry)",
+                0.0,
+                1.0,
+                preset.get("ghs_SP", 0.0) if preset else 0.0,
+                step=0.01,
+                key="ghs_SP",
+                help="Focus point of the stretch.",
+            )
+        stretch_params = {"D": ghs_D, "b": ghs_b, "SP": ghs_SP}
+    elif stretch_choice == "arcsinh":
+        arcsinh_scale = st.slider(
+            "Scale",
+            1.0,
+            100.0,
+            10.0,
+            step=1.0,
+            key="arcsinh_scale",
+            help="Stretch intensity. Higher = more compression of brights.",
+        )
+        stretch_params = {"scale": arcsinh_scale}
+    elif stretch_choice == "clahe":
+        clahe_clip = st.slider(
+            "CLAHE Clip Limit",
+            0.5,
+            10.0,
+            2.0,
+            step=0.5,
+            key="clahe_clip",
+            help="Contrast limit. Higher = more enhancement but may add noise.",
+        )
+        stretch_params = {"clip_limit": clahe_clip}
+
+    st.divider()
+
+    st.caption("Enhancement Steps (applied in order before stretch)")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        bg_sub = st.checkbox(
+            "Background Subtraction",
+            value=preset.get("background_sub", False) if preset else False,
+            key="enhance_bg_sub",
+            disabled=not is_custom,
+            help="Remove light pollution gradient using sep.",
+        )
+        hot_px = st.checkbox(
+            "Hot Pixel Removal",
+            value=preset.get("hot_pixel", False) if preset else False,
+            key="enhance_hot_pixel",
+            disabled=not is_custom,
+            help="Remove hot pixels / cosmic rays.",
+        )
+    with col2:
+        denoise = st.checkbox(
+            "Noise Reduction",
+            value=preset.get("denoise", False) if preset else False,
+            key="enhance_denoise",
+            disabled=not is_custom,
+            help="Non-Local Means denoising (OpenCV).",
+        )
+        if denoise:
+            denoise_str = st.slider(
+                "Strength",
+                3,
+                21,
+                preset.get("denoise_strength", 7) if preset else 7,
+                step=2,
+                key="enhance_denoise_str",
+                help="3=mild, 7=moderate, 15=strong, 21=very strong.",
+            )
+        else:
+            denoise_str = 7
+    with col3:
+        sharpen = st.checkbox(
+            "Sharpening",
+            value=preset.get("sharpen", False) if preset else False,
+            key="enhance_sharpen",
+            disabled=not is_custom,
+            help="Unsharp mask sharpening.",
+        )
+        if sharpen:
+            sharp_amt = st.slider(
+                "Amount",
+                0.5,
+                5.0,
+                preset.get("sharpen_amount", 1.0) if preset else 1.0,
+                step=0.5,
+                key="enhance_sharp_amt",
+                help="0.5=subtle, 1.0=moderate, 2.5=strong.",
+            )
+            sharp_rad = st.slider(
+                "Radius",
+                0.5,
+                5.0,
+                preset.get("sharpen_radius", 1.5) if preset else 1.5,
+                step=0.5,
+                key="enhance_sharp_rad",
+                help="Smaller=fine detail, larger=broader features.",
+            )
+        else:
+            sharp_amt, sharp_rad = 1.0, 1.5
+
+    color_bal = st.checkbox(
+        "Color Balance",
+        value=preset.get("color_balance", False) if preset else False,
+        key="enhance_color_bal",
+        disabled=not is_custom,
+        help="Gray world white balance correction.",
+    )
+
+    star_overlay = st.checkbox(
+        "Star Detection Overlay",
+        key="enhance_star_overlay",
+        help="Detect and circle stars using photutils DAOStarFinder.",
+    )
+
+    if preset and not is_custom:
+        params = {
+            "stretch": preset["stretch"],
+            "stretch_params": stretch_params,
+            "background_sub": preset.get("background_sub", False),
+            "hot_pixel": preset.get("hot_pixel", False),
+            "hot_pixel_method": "median",
+            "denoise": preset.get("denoise", False),
+            "denoise_strength": preset.get("denoise_strength", 7),
+            "sharpen": preset.get("sharpen", False),
+            "sharpen_amount": preset.get("sharpen_amount", 1.0),
+            "sharpen_radius": preset.get("sharpen_radius", 1.5),
+            "color_balance": preset.get("color_balance", False),
+        }
+    else:
+        params = {
+            "stretch": stretch_choice,
+            "stretch_params": stretch_params,
+            "background_sub": bg_sub,
+            "hot_pixel": hot_px,
+            "hot_pixel_method": "median",
+            "denoise": denoise,
+            "denoise_strength": denoise_str,
+            "sharpen": sharpen,
+            "sharpen_amount": sharp_amt,
+            "sharpen_radius": sharp_rad,
+            "color_balance": color_bal,
+        }
+
+    params_key = repr(sorted(params.items(), key=lambda kv: kv[0]))
+    if (
+        st.session_state.get("enhance_params_key") != params_key
+        or "enhanced_image" not in st.session_state
+    ):
+        with st.spinner("Processing..."):
+            try:
+                enhanced = run_pipeline(image, params)
+            except Exception as exc:  # algorithm deps may be missing
+                st.error(f"Enhancement failed: {exc}")
+                return image
+            st.session_state["enhanced_image"] = enhanced
+            st.session_state["enhance_params_key"] = params_key
+    else:
+        enhanced = st.session_state["enhanced_image"]
+
+    if star_overlay:
+        try:
+            import numpy as np
+
+            data = np.array(enhanced, dtype=np.float64) / 255.0
+            stars = detect_stars(data)
+            enhanced_display = draw_star_overlay(enhanced, stars)
+            st.caption(f"Detected {len(stars)} stars")
+        except Exception as exc:
+            st.warning(f"Star detection unavailable: {exc}")
+            enhanced_display = enhanced
+    else:
+        enhanced_display = enhanced
+
+    st.session_state["enhance_params"] = params
+    return enhanced_display
+
+
+def _render_comparison(original, enhanced):
+    """Render before/after comparison in the user-selected mode."""
+    mode = st.selectbox(
+        "Comparison Mode",
+        ["Side-by-Side", "Slider Overlay", "Toggle"],
+        key="comparison_mode",
+        help="Side-by-Side: two images. Slider: drag divider. Toggle: switch between.",
+    )
+
+    if mode == "Side-by-Side":
+        col_orig, col_enh = st.columns(2)
+        with col_orig:
+            st.image(original, caption="Original (Raw)", use_container_width=True)
+        with col_enh:
+            st.image(enhanced, caption="Enhanced", use_container_width=True)
+    elif mode == "Slider Overlay":
+        try:
+            from streamlit_image_comparison import image_comparison
+
+            image_comparison(
+                img1=original,
+                img2=enhanced,
+                label1="Original",
+                label2="Enhanced",
+                starting_position=50,
+                make_responsive=True,
+            )
+        except ImportError:
+            col_orig, col_enh = st.columns(2)
+            with col_orig:
+                st.image(original, caption="Original", use_container_width=True)
+            with col_enh:
+                st.image(enhanced, caption="Enhanced", use_container_width=True)
+    else:  # Toggle
+        show_enhanced = st.checkbox("Show Enhanced", value=True, key="toggle_enhanced")
+        if show_enhanced:
+            st.image(enhanced, caption="Enhanced", use_container_width=True)
+        else:
+            st.image(original, caption="Original (Raw)", use_container_width=True)
+
+
 def _render_preview_and_save(alpaca, config):
-    """Download image, show preview, and offer save."""
+    """Download image, show enhancement panel + comparison, and offer saves."""
     if not st.session_state.get("image_ready"):
         return
 
@@ -693,26 +1009,27 @@ def _render_preview_and_save(alpaca, config):
     if image is None:
         return
 
+    if not _check_postprocessing_health():
+        st.warning("⚠️ Post-processing backend unreachable — running enhancement locally only.")
+
     st.subheader("Preview")
+    enhanced = _render_enhancement_panel(image)
+    _render_comparison(image, enhanced)
 
-    use_stretch = st.checkbox("Apply histogram stretch", value=True, key="stretch_toggle")
-    display_image = apply_stretch(image) if use_stretch else image
-    st.image(display_image, caption="Captured Image", use_container_width=True)
-
-    col_name, col_save = st.columns([3, 1])
+    col_name, col_save_orig, col_save_enh = st.columns([3, 1, 1])
     with col_name:
         target_name = st.text_input(
-            "Target name for filename",
+            "Target name",
             value=st.session_state.get("slewing_target", "capture"),
             key="save_target_name",
         )
-    with col_save:
+    with col_save_orig:
         st.write("")
         st.write("")
-        if st.button("Save Image", type="primary", key="btn_save", use_container_width=True):
+        if st.button("Save Raw", key="btn_save_raw", use_container_width=True):
             save_dir = getattr(config, "save_directory", "./captures")
             filepath = save_image(image, target_name, save_dir=save_dir)
-            st.success(f"Saved: {filepath}")
+            st.success(f"Raw saved: {filepath}")
             # Log frame to active session
             sid = st.session_state.get("active_session_id")
             if sid is not None:
@@ -724,20 +1041,38 @@ def _render_preview_and_save(alpaca, config):
                     gain=st.session_state.get("gain_slider", 80),
                     filter_name="Unknown",
                 )
+    with col_save_enh:
+        st.write("")
+        st.write("")
+        if st.button(
+            "Save Enhanced",
+            type="primary",
+            key="btn_save_enh",
+            use_container_width=True,
+        ):
+            save_dir = getattr(config, "save_directory", "./captures")
+            filepath = save_image(enhanced, f"{target_name}_enhanced", save_dir=save_dir)
+            st.success(f"Enhanced saved: {filepath}")
 
-    # Handle loop mode
+    # Loop mode auto-save - saves the enhanced image
     if st.session_state.get("loop_mode"):
         completed = st.session_state.get("loop_completed", 0) + 1
         st.session_state["loop_completed"] = completed
         total = st.session_state.get("loop_frames", 10)
 
         save_dir = getattr(config, "save_directory", "./captures")
-        target_name = st.session_state.get("slewing_target", "loop")
-        filepath = save_image(image, f"{target_name}_frame{completed}", save_dir=save_dir)
+        loop_target = st.session_state.get("slewing_target", "loop")
+        filepath = save_image(
+            enhanced,
+            f"{loop_target}_frame{completed}",
+            save_dir=save_dir,
+        )
         st.caption(f"Auto-saved frame {completed}: {filepath}")
 
         if completed < total:
             st.session_state.pop("last_image", None)
+            st.session_state.pop("enhanced_image", None)
+            st.session_state.pop("enhance_params_key", None)
             exposure = st.session_state.get("img_exposure", 10.0)
             resp = alpaca.start_exposure(exposure, light=True)
             if resp.success:
