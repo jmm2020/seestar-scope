@@ -4,6 +4,7 @@ import streamlit as st
 # Navigation items with icons - use actual emoji characters
 NAV_ITEMS = {
     "Dashboard": "Dashboard",
+    "Conditions": "Conditions",
     "Live Status": "Live Status",
     "Sky Map": "Sky Map",
     "GoTo": "GoTo / Slew",
@@ -18,6 +19,7 @@ NAV_ITEMS = {
 
 NAV_ICONS = {
     "Dashboard": "\u2604\ufe0f",   # comet
+    "Conditions": "\U0001f324\ufe0f",  # sun behind small cloud
     "Live Status": "\U0001f4e1",   # satellite antenna
     "Sky Map": "\U0001f30c",       # milky way
     "GoTo": "\u2b50",              # star

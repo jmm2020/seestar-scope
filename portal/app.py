@@ -99,6 +99,10 @@ if page == "Dashboard":
     from views.dashboard import render_dashboard
     render_dashboard(alpaca, stellarium)
 
+elif page == "Conditions":
+    from views.conditions import render_conditions
+    render_conditions(config)
+
 elif page == "Live Status":
     from views.live_status import render_live_status
     render_live_status(alpaca)
