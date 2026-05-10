@@ -21,6 +21,8 @@ def _init_sequence_state():
         st.session_state.sequence_current_idx = 0
     if "sequence_current_frame" not in st.session_state:
         st.session_state.sequence_current_frame = 0
+    if "seq_session_id" not in st.session_state:
+        st.session_state.seq_session_id = None
 
 
 def _render_add_target(stellarium):
@@ -203,6 +205,12 @@ def _render_run_controls(alpaca):
                       help="Abort the running sequence and stop the current exposure."):
             st.session_state.sequence_running = False
             alpaca.abort_exposure()
+            sid = st.session_state.get("seq_session_id")
+            if sid is not None:
+                from clients.sessions_client import SessionsClient
+                _sc = SessionsClient()
+                _sc.end_session(sid)
+                st.session_state["seq_session_id"] = None
             st.warning("Sequence stopped")
 
     with col_save:
@@ -233,6 +241,13 @@ def _execute_sequence_step(alpaca):
 
     if idx >= len(targets):
         st.session_state.sequence_running = False
+        # End session on sequence complete
+        sid = st.session_state.get("seq_session_id")
+        if sid is not None:
+            from clients.sessions_client import SessionsClient
+            _sc = SessionsClient()
+            _sc.end_session(sid)
+            st.session_state["seq_session_id"] = None
         st.success("Sequence complete!")
         st.balloons()
         return
@@ -253,6 +268,17 @@ def _execute_sequence_step(alpaca):
         st.info(f"Slewing to {target['name']}...")
         resp = alpaca.slew_to(target["ra"], target["dec"])
         if resp.success:
+            # Start session on first target of sequence
+            if idx == 0 and frame == 0 and st.session_state.get("seq_session_id") is None:
+                from clients.sessions_client import SessionsClient
+                _sc = SessionsClient()
+                session = _sc.start_session(
+                    target_name=target["name"],
+                    target_ra=target["ra"],
+                    target_dec=target["dec"],
+                )
+                if session:
+                    st.session_state["seq_session_id"] = session["id"]
             st.session_state["seq_step"] = "wait_slew"
             time.sleep(1)
             st.rerun()
@@ -292,6 +318,18 @@ def _execute_sequence_step(alpaca):
 
     elif step == "wait_expose":
         if alpaca.is_image_ready():
+            # Log frame to session
+            sid = st.session_state.get("seq_session_id")
+            if sid is not None:
+                from clients.sessions_client import SessionsClient
+                _sc = SessionsClient()
+                _sc.add_frame(
+                    session_id=sid,
+                    filename=f"sequence_{target['name']}_frame{frame+1}",
+                    exposure_s=target["exposure"],
+                    gain=target["gain"],
+                    filter_name=target["filter"],
+                )
             # Frame done, advance
             st.session_state.sequence_current_frame = frame + 1
             if frame + 1 >= target["frames"]:

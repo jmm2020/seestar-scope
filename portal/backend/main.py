@@ -12,9 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-from backend.routers import telescope, gallery, processing, status_ws, autofocus, platesolve
+from backend.routers import telescope, gallery, processing, status_ws, autofocus, platesolve, sessions
 from backend.config import settings
-from backend.database import init_database, close_database
+from backend.database import init_database, close_database, init_sessions_database, close_sessions_database
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,7 +28,11 @@ async def lifespan(app: FastAPI):
     db_path = init_database()
     app.state.db_path = db_path
     logger.info(f"Gallery database ready at {db_path}")
-    
+
+    # Initialize sessions database (same file, separate connection)
+    init_sessions_database()
+    logger.info("Sessions database ready")
+
     # Initialize shared ALPACA client
     from backend.clients import get_alpaca_client, get_stellarium_client
     alpaca = get_alpaca_client()
@@ -48,6 +52,7 @@ async def lifespan(app: FastAPI):
     logger.info("SeestarScope Backend shutting down...")
     alpaca.disconnect_all()
     close_database()
+    close_sessions_database()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -72,6 +77,7 @@ app.include_router(gallery.router, prefix="/api/gallery", tags=["gallery"])
 app.include_router(processing.router, prefix="/api/processing", tags=["processing"])
 app.include_router(autofocus.router)   # prefix="/api/autofocus" defined in router
 app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in router
+app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(status_ws.router)  # WebSocket live status (Phase 3)
 
 @app.get("/")
@@ -86,6 +92,7 @@ async def root():
             "processing": "/api/processing/*",
             "autofocus": "/api/autofocus/*",
             "platesolve": "/api/platesolve/*",
+            "sessions": "/api/sessions/*",
             "status_ws": "ws://192.168.0.148:8503/api/status/ws",
             "status_connections": "/api/status/connections",
             "docs": "/docs",
