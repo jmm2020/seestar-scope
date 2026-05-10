@@ -557,8 +557,6 @@ def _render_preview_and_save(alpaca, config):
             # Log frame to active session
             sid = st.session_state.get("active_session_id")
             if sid is not None:
-                from clients.sessions_client import SessionsClient
-
                 _sc = SessionsClient()
                 _sc.add_frame(
                     session_id=sid,

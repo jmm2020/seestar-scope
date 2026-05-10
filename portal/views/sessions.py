@@ -114,7 +114,7 @@ def _render_session_detail(session_id: int, client: SessionsClient):
         ]
         st.dataframe(rows, use_container_width=True)
 
-    col_back, col_reopen = st.columns([1, 1])
+    col_back, col_reopen = st.columns(2)
     if col_back.button("Back to list", key="sess_detail_back"):
         st.session_state.pop("selected_session_id", None)
         st.rerun()

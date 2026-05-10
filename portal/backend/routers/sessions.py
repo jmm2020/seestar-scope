@@ -173,8 +173,7 @@ async def add_frame(
             captured_at=request.captured_at,
             alpaca_metadata=request.alpaca_metadata,
         )
-        frames = db.get_frames(session_id)
-        record = next((f for f in frames if f.id == frame_id), None)
+        record = db.get_frame_by_id(frame_id)
         if record is None:
             raise HTTPException(
                 status_code=500,

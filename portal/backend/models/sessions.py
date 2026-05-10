@@ -361,6 +361,14 @@ class SessionDatabase:
         )
         return [self._row_to_session(row) for row in cursor.fetchall()]
 
+    def get_frame_by_id(self, frame_id: int) -> Optional[FrameRecord]:
+        """Fetch a single frame record by primary key."""
+        cursor = self.conn.execute("SELECT * FROM frames WHERE id = ?", (frame_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_frame(row)
+
     def get_frames(self, session_id: int) -> List[FrameRecord]:
         """Return all frames for a session, oldest-first."""
         cursor = self.conn.execute(
