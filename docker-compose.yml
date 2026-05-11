@@ -19,7 +19,14 @@ services:
       - ./alp-config/config.toml:/home/seestar/seestar_alp/device/config.toml:ro
       # RSA key for Seestar firmware 7.18+ authentication (gitignored: *.pem).
       # Place the PEM at alp-config/seestar_client_key.pem before `docker compose up`.
-      - ./alp-config/seestar_client_key.pem:/etc/seestar/seestar_client_key.pem:ro
+      # Long-form bind with create_host_path: false ensures a missing PEM produces a
+      # startup error instead of silently creating a directory (Docker default behavior).
+      - type: bind
+        source: ./alp-config/seestar_client_key.pem
+        target: /etc/seestar/seestar_client_key.pem
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5555/management/apiversions"]
       interval: 30s
