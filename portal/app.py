@@ -128,6 +128,7 @@ elif page == "Imaging":
 
 elif page == "Stacking":
     from views.stacking import render_stacking
+
     render_stacking(alpaca, config)
 
 elif page == "Focus":

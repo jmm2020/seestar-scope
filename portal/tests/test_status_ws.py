@@ -1,4 +1,5 @@
 """Tests for status_ws broadcaster and REST endpoint."""
+
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -49,8 +50,9 @@ async def test_broadcaster_builds_correct_state():
 
     broadcast_calls = []
 
-    with patch("backend.routers.status_ws.manager") as mock_mgr, patch(
-        "asyncio.sleep", new=AsyncMock(side_effect=StopAsyncIteration)
+    with (
+        patch("backend.routers.status_ws.manager") as mock_mgr,
+        patch("asyncio.sleep", new=AsyncMock(side_effect=StopAsyncIteration)),
     ):
         mock_mgr.broadcast = AsyncMock(side_effect=lambda m: broadcast_calls.append(m))
         try:
@@ -88,8 +90,9 @@ async def test_broadcaster_suppresses_duplicate_broadcasts():
         if call_count >= 2:
             raise StopAsyncIteration
 
-    with patch("backend.routers.status_ws.manager") as mock_mgr, patch(
-        "asyncio.sleep", new=AsyncMock(side_effect=mock_sleep)
+    with (
+        patch("backend.routers.status_ws.manager") as mock_mgr,
+        patch("asyncio.sleep", new=AsyncMock(side_effect=mock_sleep)),
     ):
         mock_mgr.broadcast = AsyncMock(side_effect=lambda m: broadcast_calls.append(m))
         try:
@@ -111,8 +114,9 @@ async def test_broadcaster_handles_none_view_data():
     request = MagicMock()
     request.app.state.alpaca = alpaca
 
-    with patch("backend.routers.status_ws.manager") as mock_mgr, patch(
-        "asyncio.sleep", new=AsyncMock(side_effect=StopAsyncIteration)
+    with (
+        patch("backend.routers.status_ws.manager") as mock_mgr,
+        patch("asyncio.sleep", new=AsyncMock(side_effect=StopAsyncIteration)),
     ):
         mock_mgr.broadcast = AsyncMock()
         try:
@@ -149,8 +153,9 @@ async def test_broadcaster_continues_after_exception():
         if sleep_count >= 2:
             raise StopAsyncIteration
 
-    with patch("backend.routers.status_ws.manager") as mock_mgr, patch(
-        "asyncio.sleep", new=AsyncMock(side_effect=mock_sleep)
+    with (
+        patch("backend.routers.status_ws.manager") as mock_mgr,
+        patch("asyncio.sleep", new=AsyncMock(side_effect=mock_sleep)),
     ):
         mock_mgr.broadcast = AsyncMock(side_effect=lambda m: broadcast_calls.append(m))
         try:
@@ -180,8 +185,9 @@ async def test_broadcaster_handles_non_numeric_count():
 
     broadcast_calls = []
 
-    with patch("backend.routers.status_ws.manager") as mock_mgr, patch(
-        "asyncio.sleep", new=AsyncMock(side_effect=StopAsyncIteration)
+    with (
+        patch("backend.routers.status_ws.manager") as mock_mgr,
+        patch("asyncio.sleep", new=AsyncMock(side_effect=StopAsyncIteration)),
     ):
         mock_mgr.broadcast = AsyncMock(side_effect=lambda m: broadcast_calls.append(m))
         try:
@@ -202,6 +208,7 @@ async def test_broadcaster_handles_non_numeric_count():
 
 def test_live_stack_endpoint_empty_state():
     """Returns empty state dict when no broadcaster has run yet."""
+
     class FakeState:
         pass
 

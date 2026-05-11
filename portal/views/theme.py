@@ -21,20 +21,20 @@ NAV_ITEMS = {
 }
 
 NAV_ICONS = {
-    "Dashboard": "\u2604\ufe0f",   # comet
+    "Dashboard": "\u2604\ufe0f",  # comet
     "Conditions": "\U0001f324\ufe0f",  # sun behind small cloud
-    "Live Status": "\U0001f4e1",   # satellite antenna
-    "Sky Map": "\U0001f30c",       # milky way
-    "GoTo": "\u2b50",              # star
-    "Imaging": "\U0001f4f7",       # camera
-    "Stacking": "\U0001f9f2",      # magnet (layers/stacking)
-    "Focus": "\U0001f52d",         # telescope
-    "Autofocus": "\U0001f3af",     # bullseye
-    "Plate Solve": "\U0001f5fa\ufe0f", # world map
-    "Sequence": "\U0001f3ac",      # clapper
-    "Gallery": "\U0001f5bc\ufe0f", # framed picture
-    "Sessions": "\U0001f4cb",      # clipboard
-    "Settings": "\u2699\ufe0f",    # gear
+    "Live Status": "\U0001f4e1",  # satellite antenna
+    "Sky Map": "\U0001f30c",  # milky way
+    "GoTo": "\u2b50",  # star
+    "Imaging": "\U0001f4f7",  # camera
+    "Stacking": "\U0001f9f2",  # magnet (layers/stacking)
+    "Focus": "\U0001f52d",  # telescope
+    "Autofocus": "\U0001f3af",  # bullseye
+    "Plate Solve": "\U0001f5fa\ufe0f",  # world map
+    "Sequence": "\U0001f3ac",  # clapper
+    "Gallery": "\U0001f5bc\ufe0f",  # framed picture
+    "Sessions": "\U0001f4cb",  # clipboard
+    "Settings": "\u2699\ufe0f",  # gear
 }
 
 DEVICE_ICONS = {

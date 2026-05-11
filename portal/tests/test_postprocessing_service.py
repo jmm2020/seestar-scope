@@ -13,14 +13,13 @@ from backend.services.postprocessing_service import PostprocessingService
 
 
 def _write_png(path: Path, value: int = 128, size: tuple = (8, 8)) -> None:
-    Image.fromarray(
-        np.full((*size, 3), value, dtype=np.uint8), "RGB"
-    ).save(str(path))
+    Image.fromarray(np.full((*size, 3), value, dtype=np.uint8), "RGB").save(str(path))
 
 
 # ---------------------------------------------------------------------------
 # Calibration frame lifecycle
 # ---------------------------------------------------------------------------
+
 
 def test_store_and_discover_calibration_frame(tmp_path):
     svc = PostprocessingService(tmp_path)
@@ -76,6 +75,7 @@ def test_discover_existing_masters_on_restart(tmp_path):
 # apply_pipeline
 # ---------------------------------------------------------------------------
 
+
 def test_apply_pipeline_missing_source_returns_failure(tmp_path):
     svc = PostprocessingService(tmp_path)
     result = svc.apply_pipeline(str(tmp_path / "nonexistent.png"), {})
@@ -122,14 +122,13 @@ def test_apply_pipeline_output_always_in_processed_dir(tmp_path):
 # Flat near-zero guard
 # ---------------------------------------------------------------------------
 
+
 def test_apply_calibration_skips_shape_mismatch(tmp_path):
     svc = PostprocessingService(tmp_path)
     # Store a flat with a different size
     flat_path = tmp_path / "calibration" / "master_flat.png"
     flat_path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(
-        np.full((4, 4, 3), 200, dtype=np.uint8), "RGB"
-    ).save(str(flat_path))
+    Image.fromarray(np.full((4, 4, 3), 200, dtype=np.uint8), "RGB").save(str(flat_path))
     svc._calibration.flat_path = str(flat_path)
 
     # 8x8 image — shape mismatch → calibration skips, no crash
