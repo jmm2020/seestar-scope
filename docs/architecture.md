@@ -108,6 +108,7 @@ All env vars override their `config.toml` counterparts.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `SEESTAR_IP` | `192.168.0.132` | Seestar S50 IP address |
+| `SEESTAR_PORT` | `32323` | Seestar S50 ALPACA port (32323 for all modes) |
 | `SITE_LAT` | `37.12` | Observing site latitude (°N positive) |
 | `SITE_LON` | `-123.45` | Observing site longitude (°E positive) |
 | `SITE_ELEVATION_M` | `0.0` | Site elevation in metres |
