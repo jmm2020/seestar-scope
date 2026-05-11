@@ -54,15 +54,28 @@ class Config:
 
     @property
     def seestar_alp_host(self) -> str:
-        return os.environ.get("SEESTAR_ALP_HOST", self.seestar.get("alp_host", "localhost"))
+        return os.environ.get(
+            "ALP_HOST",
+            os.environ.get("SEESTAR_ALP_HOST", self.seestar.get("alp_host", "localhost")),
+        )
 
     @property
     def seestar_alp_port(self) -> int:
-        return int(os.environ.get("SEESTAR_ALP_PORT", self.seestar.get("alp_port", 5555)))
+        return int(
+            os.environ.get(
+                "ALP_PORT",
+                os.environ.get("SEESTAR_ALP_PORT", self.seestar.get("alp_port", 5555)),
+            )
+        )
 
     @property
     def seestar_img_port(self) -> int:
-        return int(os.environ.get("SEESTAR_IMG_PORT", self.seestar.get("img_port", 7556)))
+        return int(
+            os.environ.get(
+                "ALP_IMG_PORT",
+                os.environ.get("SEESTAR_IMG_PORT", self.seestar.get("img_port", 7556)),
+            )
+        )
 
     @property
     def stellarium_host(self) -> str:

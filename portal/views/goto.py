@@ -9,16 +9,12 @@ import os
 
 from utils.coordinates import format_ra, format_dec, parse_ra, parse_dec
 from catalog.messier import lookup_messier, search_catalog
+from config_loader import load_config
 
 logger = logging.getLogger(__name__)
 
-# seestar_alp ALPACA bridge — sends real commands to the Seestar via JSON-RPC.
-# Resolve from env so this works both on a developer host (defaults to localhost)
-# and inside Docker containers where ALP runs as a separate service on the
-# compose network (ALP_HOST=seestar-alp, ALP_PORT=5555).
-SEESTAR_ALP_URL = (
-    f"http://{os.environ.get('ALP_HOST', 'localhost')}:{os.environ.get('ALP_PORT', '5555')}"
-)
+_config = load_config()
+SEESTAR_ALP_URL = f"http://{_config.seestar_alp_host}:{_config.seestar_alp_port}"
 
 # Seconds to wait for a scope state transition after dispatching a command.
 # Increase if your scope is slow to respond (e.g. on a cold boot).
