@@ -42,36 +42,50 @@ except Exception:
 # --- Live View ---
 
 
+def _resolve_stream_host(alpaca) -> str:
+    """Pick the hostname the user's browser can reach the MJPEG port on.
+
+    Priority: 1) Host header from the current Streamlit request (works for
+    direct LAN IP and tunnel hostnames the browser is already using). 2) The
+    SEESTAR_PUBLIC_HOST env var (explicit override). 3) The ALP_HOST setting
+    on the client (last resort — only works if it's a real hostname, NOT the
+    docker network alias which the browser can't resolve).
+    """
+    try:
+        host_header = st.context.headers.get("host", "") if hasattr(st, "context") else ""
+    except Exception:
+        host_header = ""
+    if host_header:
+        return host_header.split(":")[0]
+    env_host = os.environ.get("SEESTAR_PUBLIC_HOST", "").strip()
+    if env_host:
+        return env_host
+    return alpaca._alp_host
+
+
 def _render_live_view(alpaca):
     """Embed the MJPEG stream from seestar_alp.
 
-    The stream URL is composed client-side from window.location.hostname so it
-    works wherever the portal is reachable (LAN IP, tunnel, localhost) without
-    hard-coding a host. img_stream_url uses the docker network hostname which
-    only resolves from inside containers.
+    The stream host is resolved server-side from the request's Host header so
+    it works for direct LAN IP, tunnel, or localhost without depending on
+    sandboxed-iframe JavaScript. img_stream_url uses the docker network
+    hostname which only resolves from inside containers.
     """
     st.subheader("Live View")
+    host = _resolve_stream_host(alpaca)
     port = alpaca.img_stream_port
     path = alpaca.img_stream_path
+    stream_url = f"http://{host}:{port}/{path}"
     st.html(f'''
         <div style="width:100%; text-align:center; background:#0a0a0a;
                     border-radius:8px; overflow:hidden; padding:4px 0;">
-            <img id="seestar-live-img"
-                 data-port="{port}" data-path="{path}"
+            <img src="{stream_url}"
                  style="width:100%; max-height:70vh; object-fit:contain;"
                  alt="Seestar Live View"
                  onerror="this.style.display='none';
                           this.parentElement.innerHTML=
                           '<p style=\\'color:#888;padding:40px\\'>Stream unavailable &mdash; '
-                          +'is seestar_alp running on port {port}?</p>'" />
-            <script>
-              (function() {{
-                  var img = document.getElementById('seestar-live-img');
-                  if (!img) return;
-                  var host = window.location.hostname;
-                  img.src = 'http://' + host + ':' + img.dataset.port + '/' + img.dataset.path;
-              }})();
-            </script>
+                          +'is seestar_alp running on port {port}? Tried {host}:{port}.</p>'" />
         </div>
     ''')
 
