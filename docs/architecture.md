@@ -113,6 +113,9 @@ All env vars override their `config.toml` counterparts.
 | `SITE_LON` | `-123.45` | Observing site longitude (°E positive) |
 | `SITE_ELEVATION_M` | `0.0` | Site elevation in metres |
 | `SITE_NAME` | `My Observatory` | Display name for the site |
+| `ALP_HOST` | `seestar-alp` (Docker) / `localhost` (dev) | Portal → ALP bridge hostname. Legacy alias: `SEESTAR_ALP_HOST` (lower priority). |
+| `ALP_PORT` | `5555` | Portal → ALP bridge port. Legacy alias: `SEESTAR_ALP_PORT`. |
+| `ALP_IMG_PORT` | `7556` | ALP image stream port. Legacy alias: `SEESTAR_IMG_PORT`. |
 
 ## ALP Backend (`vendor/seestar_alp` submodule)
 
