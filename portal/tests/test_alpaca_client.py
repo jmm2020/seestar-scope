@@ -356,3 +356,109 @@ def test_get_view_state_returns_none_on_string_payload():
     with patch.object(client.session, "put") as mock_put:
         mock_put.return_value = _mock_action_response("not-json")
         assert client.get_view_state() is None
+
+
+# --- start_up_sequence tests ---
+# ALPACA standard /unpark in seestar_alp is a stub no-op (returns success but
+# never engages the motor). start_up_sequence() calls action_start_up_sequence
+# on the device's action endpoint — the firmware-correct way to unfold the arm.
+
+
+def test_start_up_sequence_posts_named_action():
+    """start_up_sequence must PUT to /telescope/0/action with the named action,
+    NOT to /telescope/0/unpark (which is a no-op)."""
+    client = AlpacaClient()
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "Value": {"0": {"result": "Sequence started."}},
+        "ErrorNumber": 0,
+        "ErrorMessage": "",
+        "ServerTransactionID": 42,
+        "ClientTransactionID": 1,
+    }
+    with patch.object(client.session, "put", return_value=mock_resp) as mock_put:
+        resp = client.start_up_sequence()
+    assert resp.success is True
+    url = mock_put.call_args.args[0]
+    assert url.endswith("/telescope/0/action")
+    form = mock_put.call_args.kwargs["data"]
+    assert form["Action"] == "action_start_up_sequence"
+    assert '"lat": 0' in form["Parameters"]
+    assert '"lon": 0' in form["Parameters"]
+
+
+def test_start_up_sequence_passes_lat_lon():
+    """Caller-supplied lat/lon must reach the action Parameters body."""
+    client = AlpacaClient()
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "Value": None, "ErrorNumber": 0, "ErrorMessage": "",
+        "ServerTransactionID": 1, "ClientTransactionID": 1,
+    }
+    with patch.object(client.session, "put", return_value=mock_resp) as mock_put:
+        client.start_up_sequence(lat=40.5, lon=-73.2)
+    form = mock_put.call_args.kwargs["data"]
+    assert '"lat": 40.5' in form["Parameters"]
+    assert '"lon": -73.2' in form["Parameters"]
+
+
+def test_start_up_sequence_returns_failure_on_alpaca_error():
+    """When ALPACA reports ErrorNumber != 0 the response must reflect failure."""
+    client = AlpacaClient()
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "Value": None,
+        "ErrorNumber": 1024,
+        "ErrorMessage": "Not connected",
+        "ServerTransactionID": 1,
+        "ClientTransactionID": 1,
+    }
+    with patch.object(client.session, "put", return_value=mock_resp):
+        resp = client.start_up_sequence()
+    assert resp.success is False
+    assert resp.error_number == 1024
+    assert resp.error_message == "Not connected"
+
+
+def test_start_up_sequence_handles_network_error():
+    """Network exceptions must produce an AlpacaResponse failure, not raise."""
+    client = AlpacaClient()
+    with patch.object(
+        client.session, "put",
+        side_effect=requests.exceptions.ConnectionError("refused"),
+    ):
+        resp = client.start_up_sequence()
+    assert resp.success is False
+    assert resp.error_number == -1
+    assert "refused" in resp.error_message
+
+
+# --- img_stream_* tests ---
+# The MJPEG live view used to be embedded with the docker network hostname
+# (seestar-alp:7556/1/vid) — browser couldn't resolve the hostname AND the
+# device number was wrong. The portal now exposes port+path separately so the
+# browser composes the URL with window.location.hostname.
+
+
+def test_img_stream_path_uses_device_zero():
+    """The Seestar device is numbered 0 — /1/vid returns KeyError: 1 in alp."""
+    client = AlpacaClient()
+    assert client.img_stream_path == "0/vid"
+
+
+def test_img_stream_port_defaults_to_7556():
+    """Default seestar_alp imaging port is 7556."""
+    client = AlpacaClient()
+    assert client.img_stream_port == 7556
+
+
+def test_img_stream_port_respects_constructor_override():
+    """img_stream_port reflects the img_port constructor argument."""
+    client = AlpacaClient(img_port=9999)
+    assert client.img_stream_port == 9999
+
+
+def test_img_stream_url_uses_device_zero_not_one():
+    """Legacy img_stream_url must also use /0/vid (not /1/vid which 500s)."""
+    client = AlpacaClient(alp_host="seestar-alp", img_port=7556)
+    assert client.img_stream_url == "http://seestar-alp:7556/0/vid"
