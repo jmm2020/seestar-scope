@@ -24,7 +24,7 @@ def test_site_defaults_from_toml(tmp_path):
 
 def test_site_env_overrides_toml(tmp_path, monkeypatch):
     cfg_file = tmp_path / "config.toml"
-    cfg_file.write_text('[site]\nlatitude = 51.5\nlongitude = -0.1\n')
+    cfg_file.write_text("[site]\nlatitude = 51.5\nlongitude = -0.1\n")
     monkeypatch.setenv("SITE_LAT", "34.05")
     monkeypatch.setenv("SITE_LON", "-118.25")
     monkeypatch.setenv("SITE_NAME", "LA Observatory")
@@ -36,7 +36,7 @@ def test_site_env_overrides_toml(tmp_path, monkeypatch):
 
 def test_site_elevation_env_override(tmp_path, monkeypatch):
     cfg_file = tmp_path / "config.toml"
-    cfg_file.write_text('[site]\nelevation_m = 100.0\n')
+    cfg_file.write_text("[site]\nelevation_m = 100.0\n")
     monkeypatch.setenv("SITE_ELEVATION_M", "250.5")
     cfg = load_config(cfg_file)
     assert cfg.site_elevation_m == pytest.approx(250.5)

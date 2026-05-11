@@ -91,7 +91,9 @@ async def end_session(
 async def list_sessions(
     limit: int = Query(50, ge=1, le=500, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    include_frame_counts: bool = Query(False, description="Attach frame_count and total_exposure_s to each record"),
+    include_frame_counts: bool = Query(
+        False, description="Attach frame_count and total_exposure_s to each record"
+    ),
     db: SessionDatabase = Depends(get_sessions_db),
 ):
     """List sessions, newest-first."""
