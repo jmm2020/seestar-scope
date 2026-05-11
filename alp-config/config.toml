@@ -69,7 +69,9 @@ name = "Seestar Alpha"
 # DHCP-assigned LAN IP directly. Update if your S50's IP changes — consider
 # a DHCP reservation on the router to keep this stable.
 ip_address = "192.168.0.132"
-device_num = 1
+# Portal hard-codes ALPACA device index 0 in all telescope URLs; the seestar
+# entry must register at the same index or every call fails with 404.
+device_num = 0
 # You can specify the following settings to override those found in the seestar_initialization section on a per-device level
 #is_EQ_mode = false          # can be used to override default
 

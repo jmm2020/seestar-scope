@@ -262,12 +262,19 @@ class AlpacaClient:
                 try:
                     value = json.loads(value)
                 except (json.JSONDecodeError, TypeError):
-                    pass
+                    # ALP returns a plain-text error string (e.g. "Error: Exceeded
+                    # allotted wait time for result") on JSON-RPC timeout. Callers
+                    # expect None on failure, not a string.
+                    logger.warning(
+                        f"seestar_action({method}) returned non-JSON string: {value[:100]!r}"
+                    )
+                    return None
+            if not isinstance(value, dict):
+                return None
             # seestar_alp wraps responses as {"1": {"result": ...}} — unwrap
-            if isinstance(value, dict):
-                inner = value.get("1") or value.get(1)
-                if isinstance(inner, dict) and "result" in inner:
-                    return inner["result"]
+            inner = value.get("1") or value.get(1)
+            if isinstance(inner, dict) and "result" in inner:
+                return inner["result"]
             return value
         except requests.exceptions.RequestException as e:
             logger.error(f"seestar_action({method}) failed: {e}")

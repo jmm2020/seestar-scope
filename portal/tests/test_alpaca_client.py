@@ -227,3 +227,75 @@ def test_is_alp_available_timeout():
         side_effect=requests.exceptions.Timeout("timed out"),
     ):
         assert client.is_alp_available() is False
+
+
+# --- seestar_action() error-shape tests (regression for issue #29) ---
+
+
+def _mock_action_response(value, error_number=0, error_message=""):
+    """Mock the PUT response for /telescope/0/action."""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "Value": value,
+        "ErrorNumber": error_number,
+        "ErrorMessage": error_message,
+        "ServerTransactionID": 1,
+        "ClientTransactionID": 1,
+    }
+    return mock_resp
+
+
+def test_seestar_action_returns_none_on_timeout_string():
+    """When ALP times out it returns a plain-text error string in Value; we must
+    return None, not pass the string through to callers that expect a dict."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response(
+            "Error: Exceeded allotted wait time for result"
+        )
+        result = client.seestar_action("get_device_state")
+    assert result is None
+
+
+def test_seestar_action_returns_none_on_non_json_string():
+    """A Value that looks dict-like but isn't valid JSON (e.g. Python repr) must
+    also coerce to None rather than reach the caller."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response(
+            "{'method': 'get_device_state', 'result': 'some error'}"
+        )
+        result = client.seestar_action("get_device_state")
+    assert result is None
+
+
+def test_seestar_action_returns_none_on_non_dict_value():
+    """List/number/bool values that aren't ALP-wrapped dicts coerce to None."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response([1, 2, 3])
+        result = client.seestar_action("get_device_state")
+    assert result is None
+
+
+def test_seestar_action_unwraps_dict_result():
+    """The happy path: ALP wraps the JSON-RPC reply as {"1": {"result": ...}}
+    and we return the inner result dict."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response(
+            {"1": {"result": {"battery_capacity": 87}}}
+        )
+        result = client.seestar_action("get_device_state")
+    assert result == {"battery_capacity": 87}
+
+
+def test_seestar_action_parses_json_string_value():
+    """When Value is a JSON-encoded string the client should parse and unwrap it."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response(
+            '{"1": {"result": {"mode": "star"}}}'
+        )
+        result = client.seestar_action("get_view_state")
+    assert result == {"mode": "star"}
