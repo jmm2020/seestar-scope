@@ -79,11 +79,14 @@ def _render_session_status(alpaca):
         )
 
     view_data = alpaca.get_view_state()
-    if not view_data:
+    if not view_data or not isinstance(view_data, dict):
         st.info("No view state available - Seestar may not be connected")
         return None, False
 
     view = view_data.get("View", view_data)
+    if not isinstance(view, dict):
+        st.info("View state unavailable")
+        return None, False
     state = view.get("state", "idle")
     mode = view.get("mode", "unknown")
     stage = view.get("stage", "unknown")
