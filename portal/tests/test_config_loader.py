@@ -120,3 +120,31 @@ def test_alp_img_port_default_when_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("SEESTAR_IMG_PORT", raising=False)
     cfg = load_config(tmp_path / "nonexistent.toml")
     assert cfg.seestar_img_port == 7556
+
+
+def test_alp_port_primary_takes_precedence_over_legacy(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALP_PORT", "6000")
+    monkeypatch.setenv("SEESTAR_ALP_PORT", "9999")
+    cfg = load_config(tmp_path / "nonexistent.toml")
+    assert cfg.seestar_alp_port == 6000
+
+
+def test_alp_img_port_primary_takes_precedence_over_legacy(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALP_IMG_PORT", "8888")
+    monkeypatch.setenv("SEESTAR_IMG_PORT", "7557")
+    cfg = load_config(tmp_path / "nonexistent.toml")
+    assert cfg.seestar_img_port == 8888
+
+
+def test_alp_properties_from_toml(tmp_path, monkeypatch):
+    for var in ("ALP_HOST", "SEESTAR_ALP_HOST", "ALP_PORT",
+                "SEESTAR_ALP_PORT", "ALP_IMG_PORT", "SEESTAR_IMG_PORT"):
+        monkeypatch.delenv(var, raising=False)
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(
+        '[seestar]\nalp_host = "my-scope-host"\nalp_port = 6000\nimg_port = 7001\n'
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.seestar_alp_host == "my-scope-host"
+    assert cfg.seestar_alp_port == 6000
+    assert cfg.seestar_img_port == 7001
