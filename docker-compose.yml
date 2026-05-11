@@ -46,8 +46,8 @@ services:
       - "8503:8503"
     environment:
       - TZ=${TZ:-America/New_York}
-      - SEESTAR_IP=${SEESTAR_IP:-192.168.4.1}
-      - SEESTAR_PORT=${SEESTAR_PORT:-11111}
+      - SEESTAR_IP=${SEESTAR_IP:?SEESTAR_IP must be set in .env (station-mode: 192.168.0.132 | AP-mode: 192.168.4.1)}
+      - SEESTAR_PORT=${SEESTAR_PORT:?SEESTAR_PORT must be set in .env (ALPACA port is 32323 for both modes)}
       - ALP_HOST=seestar-alp
       - ALP_PORT=5555
       - DATA_DIR=/app/data
