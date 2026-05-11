@@ -348,3 +348,11 @@ def test_seestar_action_returns_none_when_value_key_absent():
         result = client.seestar_action("get_device_state")
     assert result is None
     mock_logger.warning.assert_called_once()
+
+
+def test_get_view_state_returns_none_on_string_payload():
+    """End-to-end: get_view_state() never leaks a string to UI code."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response("not-json")
+        assert client.get_view_state() is None
