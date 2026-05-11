@@ -191,8 +191,7 @@ def _render_device_health(alpaca):
     st.subheader("Device Health")
     try:
         state = alpaca.get_device_state()
-        # Use isinstance, not truthiness: a non-empty error string is truthy and
-        # would slip past `if not state` straight into state.get(...) -> AttributeError.
+        # isinstance guard: truthy error string would crash on .get()
         if not isinstance(state, dict):
             st.warning("Could not fetch device state (seestar_alp may not support method_sync)")
             return
