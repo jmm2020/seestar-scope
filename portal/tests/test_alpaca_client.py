@@ -283,9 +283,7 @@ def test_seestar_action_unwraps_dict_result():
     and we return the inner result dict."""
     client = AlpacaClient()
     with patch.object(client.session, "put") as mock_put:
-        mock_put.return_value = _mock_action_response(
-            {"1": {"result": {"battery_capacity": 87}}}
-        )
+        mock_put.return_value = _mock_action_response({"1": {"result": {"battery_capacity": 87}}})
         result = client.seestar_action("get_device_state")
     assert result == {"battery_capacity": 87}
 
@@ -294,8 +292,6 @@ def test_seestar_action_parses_json_string_value():
     """When Value is a JSON-encoded string the client should parse and unwrap it."""
     client = AlpacaClient()
     with patch.object(client.session, "put") as mock_put:
-        mock_put.return_value = _mock_action_response(
-            '{"1": {"result": {"mode": "star"}}}'
-        )
+        mock_put.return_value = _mock_action_response('{"1": {"result": {"mode": "star"}}}')
         result = client.seestar_action("get_view_state")
     assert result == {"mode": "star"}
