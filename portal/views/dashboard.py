@@ -191,7 +191,8 @@ def _render_device_health(alpaca):
     st.subheader("Device Health")
     try:
         state = alpaca.get_device_state()
-        if not state:
+        # isinstance guard: truthy error string would crash on .get()
+        if not isinstance(state, dict):
             st.warning("Could not fetch device state (seestar_alp may not support method_sync)")
             return
 
@@ -357,7 +358,7 @@ def _render_view_state(alpaca):
     st.subheader("Session Status")
     try:
         view_data = alpaca.get_view_state()
-        if not view_data:
+        if not isinstance(view_data, dict):
             st.info("No active view state")
             return
 
