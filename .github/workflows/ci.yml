@@ -35,7 +35,7 @@ jobs:
         env:
           # Build-time ARG stubs — CI doesn't connect to hardware; values satisfy Dockerfile ARG declarations
           SEESTAR_IP: "192.168.4.1"
-          SEESTAR_PORT: "11111"
+          SEESTAR_PORT: "32323"
           TZ: "America/New_York"
           BACKEND_URL: "http://seestar-portal-backend:8503"
         run: docker compose build

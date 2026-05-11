@@ -46,7 +46,7 @@ cd seestar-scope
 
 # Configure environment
 cp .env.example .env
-# Edit .env: set SEESTAR_IP to your S50's IP address
+# Edit .env: set SEESTAR_IP to your S50's IP address; verify SEESTAR_PORT=32323
 
 # Build and start all services
 docker compose build
