@@ -360,64 +360,48 @@ def _render_quick_targets(alpaca):
 
 
 def _render_mount_controls(alpaca):
-    """Open, Park, Stop, and Tracking controls."""
+    """Unpark, Park, Find Home, and Tracking controls."""
     st.subheader("Mount Controls")
     st.caption(
-        "Open sends a slew to unfold the arm. Park attempts to close it "
-        "(firmware-dependent). Tracking compensates for Earth's rotation."
+        "Unpark before slewing. Park stows the arm. Find Home re-references the "
+        "mount. Tracking compensates for Earth's rotation."
     )
-    alp_up = _check_alp_reachable()
-    if not alp_up:
-        st.warning(
-            "Mount control unavailable — seestar-alp is not reachable at "
-            f"{SEESTAR_ALP_URL}. Open / Park / Stop commands require this service."
-        )
-    col_open, col_park, col_stop, col_track = st.columns(4)
+    col_open, col_park, col_home, col_track = st.columns(4)
     with col_open:
         if st.button(
-            "Open Scope",
+            "Unpark (Open)",
             type="primary",
             use_container_width=True,
-            disabled=not alp_up,
-            help="Wake the Seestar into operational mode "
-            "(iscope_start_view, mode=star) and unfold the arm. "
-            "Required before any slew — the scope rejects movement "
-            "commands while in HOME state with 'fail to operate'.",
+            help="Release the telescope from park position so it can accept "
+            "slew commands. Sends standard ALPACA Unpark — firmware unfolds "
+            "the arm mechanically.",
         ):
-            result = _seestar_action(
-                "iscope_start_view",
-                params={"params": {"mode": "star"}},
-            )
-            if not result["success"]:
-                st.error(f"Open failed: {result['error']}")
-            else:
-                with st.spinner(f"Waiting for scope to open (up to {VERIFY_TIMEOUT_S}s)..."):
+            resp = alpaca.unpark()
+            if resp.success:
+                with st.spinner(f"Waiting for scope to unpark (up to {VERIFY_TIMEOUT_S}s)..."):
                     transitioned = _poll_state_transition(
                         alpaca,
-                        lambda s: s.get("at_park", True) is False and s.get("at_home", True) is False,
+                        lambda s: s.get("at_park", True) is False,
                     )
                 if transitioned:
-                    st.success("Scope opened — arm is unfolded and ready.")
+                    st.success("Scope unparked — arm is unfolded and ready.")
                     st.rerun()
                 else:
-                    st.error(
-                        "Command sent but scope didn't leave HOME/park state. "
-                        "It may be powered off, in HOME state with no power, or "
-                        "firmware rejected the command. Check the Seestar app."
+                    st.warning(
+                        "Unpark command accepted but at_park state hasn't cleared yet. "
+                        "Check the scope physically and refresh the dashboard."
                     )
+            else:
+                st.error(f"Unpark failed: {resp.error_message}")
     with col_park:
         if st.button(
             "Park (Close)",
             use_container_width=True,
-            disabled=not alp_up,
-            help="Attempt to fold/close the telescope arm via scope_park. "
-            "Note: may not work on all firmware versions. "
-            "Use the Seestar app to park if this doesn't respond.",
+            help="Stow the telescope to its safe park position via standard "
+            "ALPACA Park. Always park before powering off.",
         ):
-            result = _seestar_action("scope_park")
-            if not result["success"]:
-                st.error(f"Park failed: {result['error']}")
-            else:
+            resp = alpaca.park()
+            if resp.success:
                 with st.spinner(f"Waiting for scope to park (up to {VERIFY_TIMEOUT_S}s)..."):
                     transitioned = _poll_state_transition(
                         alpaca,
@@ -427,34 +411,35 @@ def _render_mount_controls(alpaca):
                     st.success("Scope parked — arm is closed.")
                     st.rerun()
                 else:
-                    st.error(
-                        "Command sent but scope didn't reach park state. "
-                        "Try the Seestar app to park manually."
+                    st.warning(
+                        "Park command accepted but at_park state hasn't reported True yet. "
+                        "Check the scope physically and refresh the dashboard."
                     )
-    with col_stop:
-        if st.button(
-            "Stop Slew",
-            use_container_width=True,
-            disabled=not alp_up,
-            help="Abort the current slew and stop the telescope. Uses the iscope_stop_view (AutoGoto) action.",
-        ):
-            result = _seestar_action("iscope_stop_view", params={"stage": "AutoGoto"})
-            if not result["success"]:
-                st.error(f"Stop failed: {result['error']}")
             else:
-                with st.spinner(f"Waiting for slew to stop (up to {VERIFY_TIMEOUT_S}s)..."):
+                st.error(f"Park failed: {resp.error_message}")
+    with col_home:
+        if st.button(
+            "Find Home",
+            use_container_width=True,
+            help="Slew to the home reference position. Useful for re-calibrating "
+            "the mount's coordinate system.",
+        ):
+            resp = alpaca.find_home()
+            if resp.success:
+                with st.spinner(f"Waiting for scope to reach home (up to {VERIFY_TIMEOUT_S}s)..."):
                     transitioned = _poll_state_transition(
                         alpaca,
-                        lambda s: s.get("slewing", True) is False,
+                        lambda s: s.get("at_home", False) is True,
                     )
                 if transitioned:
-                    st.success("Scope is not slewing.")
+                    st.success("Scope is at home.")
                     st.rerun()
                 else:
-                    st.error(
-                        "Command sent but scope is still reporting slewing=True. "
-                        "Check the Seestar app."
+                    st.warning(
+                        "Find Home accepted but at_home state hasn't reported True yet."
                     )
+            else:
+                st.error(f"Find Home failed: {resp.error_message}")
     with col_track:
         try:
             status = alpaca.get_telescope_status()
