@@ -159,6 +159,32 @@ class AlpacaClient:
     def unpark(self) -> AlpacaResponse:
         return self._put("telescope", 0, "unpark")
 
+    def start_up_sequence(self, lat: float = 0.0, lon: float = 0.0) -> AlpacaResponse:
+        """Run Seestar's firmware startup sequence — physically unfolds the arm.
+
+        ALPACA standard `/unpark` is a stub no-op in seestar_alp (returns success but
+        never engages the motor). The firmware-correct way to open the arm is the
+        named action `action_start_up_sequence` on the device's action endpoint.
+        """
+        url = f"{self.alp_base_url}/telescope/0/action"
+        form_data = {
+            "Action": "action_start_up_sequence",
+            "Parameters": json.dumps({"lat": lat, "lon": lon}),
+            "ClientID": str(self.client_id),
+            "ClientTransactionID": str(self._next_transaction_id()),
+        }
+        try:
+            resp = self.session.put(url, data=form_data, timeout=self.timeout)
+            data = resp.json()
+            return AlpacaResponse(
+                value=data.get("Value"),
+                error_number=data.get("ErrorNumber", 0),
+                error_message=data.get("ErrorMessage", ""),
+                server_transaction_id=data.get("ServerTransactionID", 0),
+            )
+        except requests.exceptions.RequestException as e:
+            return AlpacaResponse(error_number=-1, error_message=str(e))
+
     def find_home(self) -> AlpacaResponse:
         return self._put("telescope", 0, "findhome")
 
@@ -296,9 +322,24 @@ class AlpacaClient:
     # --- Live View & Stacking ---
 
     @property
+    def img_stream_port(self) -> int:
+        """Port the seestar_alp imaging server listens on (browser-facing)."""
+        return self._img_port
+
+    @property
+    def img_stream_path(self) -> str:
+        """Path portion of the MJPEG live view stream (device 0). Browser
+        composes the full URL by prepending its own location.hostname, so the
+        stream is reachable wherever the portal is reachable (LAN IP, tunnel,
+        localhost) without hard-coding a host."""
+        return "0/vid"
+
+    @property
     def img_stream_url(self) -> str:
-        """MJPEG live view stream URL (resolved by user's browser, not server)."""
-        return f"http://{self._alp_host}:{self._img_port}/1/vid"
+        """MJPEG live view URL using the configured ALP host. Note: this only
+        works from inside the docker network — for browser embedding use
+        img_stream_port + img_stream_path with window.location.hostname."""
+        return f"http://{self._alp_host}:{self._img_port}/0/vid"
 
     def start_view(self, mode: str = "star") -> Optional[dict]:
         """Start live view mode (prerequisite for stacking)."""

@@ -43,19 +43,35 @@ except Exception:
 
 
 def _render_live_view(alpaca):
-    """Embed the MJPEG stream from seestar_alp."""
+    """Embed the MJPEG stream from seestar_alp.
+
+    The stream URL is composed client-side from window.location.hostname so it
+    works wherever the portal is reachable (LAN IP, tunnel, localhost) without
+    hard-coding a host. img_stream_url uses the docker network hostname which
+    only resolves from inside containers.
+    """
     st.subheader("Live View")
-    stream_url = alpaca.img_stream_url
+    port = alpaca.img_stream_port
+    path = alpaca.img_stream_path
     st.html(f'''
         <div style="width:100%; text-align:center; background:#0a0a0a;
                     border-radius:8px; overflow:hidden; padding:4px 0;">
-            <img src="{stream_url}"
+            <img id="seestar-live-img"
+                 data-port="{port}" data-path="{path}"
                  style="width:100%; max-height:70vh; object-fit:contain;"
                  alt="Seestar Live View"
                  onerror="this.style.display='none';
                           this.parentElement.innerHTML=
                           '<p style=\\'color:#888;padding:40px\\'>Stream unavailable &mdash; '
-                          +'is seestar_alp running on port {alpaca._img_port}?</p>'" />
+                          +'is seestar_alp running on port {port}?</p>'" />
+            <script>
+              (function() {{
+                  var img = document.getElementById('seestar-live-img');
+                  if (!img) return;
+                  var host = window.location.hostname;
+                  img.src = 'http://' + host + ':' + img.dataset.port + '/' + img.dataset.path;
+              }})();
+            </script>
         </div>
     ''')
 

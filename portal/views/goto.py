@@ -368,11 +368,12 @@ def _render_mount_controls(alpaca):
             "Unpark (Open)",
             type="primary",
             use_container_width=True,
-            help="Release the telescope from park position so it can accept "
-            "slew commands. Sends standard ALPACA Unpark — firmware unfolds "
-            "the arm mechanically.",
+            help="Run Seestar's firmware startup sequence to physically unfold "
+            "the arm. ALPACA's standard /unpark endpoint is a no-op stub in "
+            "seestar_alp — this calls action_start_up_sequence instead, which "
+            "engages the arm motor.",
         ):
-            resp = alpaca.unpark()
+            resp = alpaca.start_up_sequence()
             if resp.success:
                 with st.spinner(f"Waiting for scope to unpark (up to {VERIFY_TIMEOUT_S}s)..."):
                     transitioned = _poll_state_transition(
@@ -384,11 +385,11 @@ def _render_mount_controls(alpaca):
                     st.rerun()
                 else:
                     st.warning(
-                        "Unpark command accepted but at_park state hasn't cleared yet. "
-                        "Check the scope physically and refresh the dashboard."
+                        "Start-up sequence command accepted but at_park hasn't cleared. "
+                        "The arm may still be unfolding — give it 10–15s and refresh."
                     )
             else:
-                st.error(f"Unpark failed: {resp.error_message}")
+                st.error(f"Start-up sequence failed: {resp.error_message}")
     with col_park:
         if st.button(
             "Park (Close)",
