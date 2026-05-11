@@ -257,7 +257,7 @@ class AlpacaClient:
             if data.get("ErrorNumber", 0) != 0:
                 logger.warning(f"seestar_action({method}) error: {data.get('ErrorMessage')}")
                 return None
-            value = data.get("Value", {})
+            value = data.get("Value")
             if isinstance(value, str):
                 try:
                     value = json.loads(value)
@@ -270,9 +270,15 @@ class AlpacaClient:
                     )
                     return None
             if not isinstance(value, dict):
+                logger.warning(
+                    f"seestar_action({method}) returned unexpected value type "
+                    f"{type(value).__name__!r}: {repr(value)[:100]}"
+                )
                 return None
             # seestar_alp wraps responses as {"1": {"result": ...}} — unwrap
-            inner = value.get("1") or value.get(1)
+            inner = value.get("1")
+            if inner is None:
+                inner = value.get(1)
             if isinstance(inner, dict) and "result" in inner:
                 return inner["result"]
             return value

@@ -295,3 +295,56 @@ def test_seestar_action_parses_json_string_value():
         mock_put.return_value = _mock_action_response('{"1": {"result": {"mode": "star"}}}')
         result = client.seestar_action("get_view_state")
     assert result == {"mode": "star"}
+
+
+def test_seestar_action_returns_none_on_alpaca_error():
+    """ALPACA ErrorNumber != 0 must return None regardless of Value content."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response(
+            value=None, error_number=1024, error_message="Not connected"
+        )
+        result = client.seestar_action("get_device_state")
+    assert result is None
+
+
+def test_seestar_action_logs_warning_on_non_dict_value():
+    """Non-dict Value (list, int, None) must log a warning — not silently return None."""
+    client = AlpacaClient()
+    with (
+        patch.object(client.session, "put") as mock_put,
+        patch("clients.alpaca_client.logger") as mock_logger,
+    ):
+        mock_put.return_value = _mock_action_response([1, 2, 3])
+        result = client.seestar_action("get_device_state")
+    assert result is None
+    mock_logger.warning.assert_called_once()
+    assert "unexpected value type" in mock_logger.warning.call_args.args[0]
+
+
+def test_seestar_action_returns_plain_dict_without_alp_envelope():
+    """A dict Value that lacks the '1' ALP wrapper is passed through unchanged."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response({"status": "ok"})
+        result = client.seestar_action("some_method")
+    assert result == {"status": "ok"}
+
+
+def test_seestar_action_returns_none_when_value_key_absent():
+    """When the ALPACA response omits the Value key entirely, return None cleanly."""
+    client = AlpacaClient()
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "ErrorNumber": 0,
+        "ErrorMessage": "",
+        "ServerTransactionID": 1,
+        "ClientTransactionID": 1,
+    }
+    with (
+        patch.object(client.session, "put", return_value=mock_resp),
+        patch("clients.alpaca_client.logger") as mock_logger,
+    ):
+        result = client.seestar_action("get_device_state")
+    assert result is None
+    mock_logger.warning.assert_called_once()
