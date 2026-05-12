@@ -1,6 +1,6 @@
 # Seestar S50 — Jetson Orin Deployment
 
-One-command deployment of the Seestar portal + ALP backend on a Jetson Orin.
+One-command deployment of the SeestarScope portal on a Jetson Orin. The portal talks directly to the Seestar S50's native ALPACA endpoint at `192.168.0.132:32323` — no bridge container is required.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ The script is **idempotent** — safe to re-run at any time.
 |------|--------|-------------|
 | 1 | Check prerequisites (git) | Yes |
 | 2 | Install Docker (if missing via `get.docker.com`) | Yes — skips if present |
-| 3 | Clone repo with submodules (or `git pull` if exists) | Yes |
+| 3 | Clone repo (or `git pull` if exists) | Yes |
 | 4 | Create `.env` (interactive prompt for `SEESTAR_IP`) | Yes — skips if `.env` exists |
 | 5 | `docker compose build` (ARM64 images) | Rebuilds each run |
 | 6 | Install + enable `seestar-stack` systemd service | Yes — refreshes unit file |
@@ -133,7 +133,6 @@ Fill in after first deployment:
 
 | Service | RSS Memory | CPU (idle) |
 |---------|-----------|-----------|
-| seestar-alp | ~XXX MB | ~X% |
 | seestar-portal-backend | ~XXX MB | ~X% |
 | seestar-portal-ui | ~XXX MB | ~X% |
 

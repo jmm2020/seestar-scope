@@ -27,7 +27,7 @@ Run from the **workstation** before starting cutover:
 
 2. **Stop workstation containers**:
    ```bash
-   docker compose stop seestar-portal-ui seestar-portal-backend seestar-alp
+   docker compose stop seestar-portal-ui seestar-portal-backend
    ```
 
 3. **Run final smoke on Jetson**:
@@ -43,7 +43,7 @@ If Jetson deployment is not functioning correctly after cutover:
 
 1. **Restart workstation containers**:
    ```bash
-   docker compose start seestar-portal-ui seestar-portal-backend seestar-alp
+   docker compose start seestar-portal-ui seestar-portal-backend
    ```
 
 2. **Revert access** — Point bookmark / DNS back to `http://localhost:8502`

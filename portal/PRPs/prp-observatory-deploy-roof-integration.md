@@ -4,13 +4,13 @@
 **Date**: 2026-05-05
 **Owner**: John (operator)
 **WARP Estimate**: 5 (~half day to 1 day)
-**Dependencies**: SeestarScope Phase 3 (shipped), seestar_alp ALPACA bridge (cloned), Jetson Orin Nano 8GB @ 192.168.0.234
+**Dependencies**: SeestarScope Phase 3 (shipped), Jetson Orin Nano 8GB @ 192.168.0.234
 **Project**: SEESTARSCOPE
 **Resume context**: `memgraph_20260504_195041_440521`
 
 ## 1. Objective
 
-Deploy the SeestarScope platform (Streamlit UI + FastAPI backend + seestar_alp ALPACA bridge) to the Jetson Orin Nano 8GB at the observatory, and integrate observatory roof control via an eWeLink Sonoff switch (LAN mode, no cloud dependency). End state: a single browser tab on any LAN device drives slew, capture, gallery review, **and** opens/closes the observatory roof.
+Deploy the SeestarScope platform (Streamlit UI + FastAPI backend talking directly to the Seestar S50's native ALPACA REST at `192.168.0.132:32323`) to the Jetson Orin Nano 8GB at the observatory, and integrate observatory roof control via an eWeLink Sonoff switch (LAN mode, no cloud dependency). End state: a single browser tab on any LAN device drives slew, capture, gallery review, **and** opens/closes the observatory roof.
 
 ## 2. Background & Context
 
@@ -28,7 +28,6 @@ The roof switch is a Sonoff/eWeLink basic on/off relay. The library `skydiver/ew
 - ✅ JetPack R36.4.7 (L4T) base
 - ✅ LedgerLLM artifacts archived to `/media/jmm2020/AIDrive1/UCIS-v1/data/archive/ledgerllm/`
 - ✅ SeestarScope project at `/media/jmm2020/KnowledgeBase/seestar_scope/` (11 views, FastAPI backend, docker-compose.seestar.yml)
-- ✅ seestar_alp ALPACA bridge cloned at `/media/jmm2020/AIDrive1/UCIS-v1/projects/seestar_alp/`
 - ⏳ Jetson cleanup not yet executed (Phases 1-5 staged in resume memory)
 - ⏳ eWeLink switch credentials (account email + password) — needed for first device discovery
 - ⏳ eWeLink switch device ID — captured during first authenticated discovery, then LAN-mode lookups use it directly
@@ -54,11 +53,8 @@ Expected end state: ~90GB freed, ~6GB RAM available, no extraneous services runn
   sshpass -p 2020 rsync -av --exclude='.pytest_cache' --exclude='__pycache__' --exclude='captures/' \
     /media/jmm2020/KnowledgeBase/seestar_scope/ \
     jmm2020@192.168.0.234:/opt/seestar_scope/
-  sshpass -p 2020 rsync -av \
-    /media/jmm2020/AIDrive1/UCIS-v1/projects/seestar_alp/ \
-    jmm2020@192.168.0.234:/opt/seestar_alp/
   ```
-- ARM64 verification: SeestarScope is pure Python (Streamlit + FastAPI + httpx + astropy + Pillow) — all wheels exist for aarch64. seestar_alp is also pure Python.
+- ARM64 verification: SeestarScope is pure Python (Streamlit + FastAPI + httpx + astropy + Pillow) — all wheels exist for aarch64.
 - Validation: `find /opt/seestar_scope -name "*.py" | wc -l` matches local count.
 
 ### Step 3: Build eWeLink Node sidecar container
@@ -202,23 +198,15 @@ Expected end state: ~90GB freed, ~6GB RAM available, no extraneous services runn
 - Action: Single compose file that brings up all 4 services with restart policies:
   ```yaml
   services:
-    seestar-alp:
-      build: /opt/seestar_alp
-      network_mode: host        # ALPACA on :5555
-      restart: unless-stopped
-      environment:
-        - SEESTAR_IP=192.168.0.132
-        - SEESTAR_PORT=4700
-
     seestar-backend:
       build:
         context: /opt/seestar_scope
         dockerfile: backend/Dockerfile
-      network_mode: host        # FastAPI on :8503
-      depends_on: [seestar-alp]
+      network_mode: host        # FastAPI on :8503; talks to S50 native ALPACA at 192.168.0.132:32323
       restart: unless-stopped
       environment:
         - SEESTAR_IP=192.168.0.132
+        - SEESTAR_PORT=32323
         - ROOF_CONTROL_URL=http://localhost:8504
       volumes:
         - /opt/seestar_scope/captures:/app/captures
@@ -291,7 +279,7 @@ Out of scope for v1.0 — flagged for follow-up:
 ## 5. Success Criteria
 
 - [ ] Jetson cleanup complete; ~90GB freed; no Ollama/LedgerAI processes running
-- [ ] All 4 containers (`seestar-alp`, `seestar-backend`, `roof-control`, `seestar-ui`) healthy via `docker compose ps`
+- [ ] All 3 containers (`seestar-backend`, `roof-control`, `seestar-ui`) healthy via `docker compose ps`
 - [ ] systemd unit brings the stack up on Jetson reboot without manual intervention
 - [ ] `http://192.168.0.234:8501` renders SeestarScope dashboard from any LAN device
 - [ ] Roof control card shows current state, opens/closes the physical switch on click
@@ -312,9 +300,9 @@ Out of scope for v1.0 — flagged for follow-up:
 | Test | Input | Expected Output |
 |------|-------|-----------------|
 | Jetson cleanup | Phase 1-5 commands | Ollama removed, ~90GB freed, services stopped |
-| ARM64 build | `docker compose build` | All 4 images build without errors |
+| ARM64 build | `docker compose build` | All 3 images build without errors |
 | Backend health | `curl :8503/health` | 200 OK |
-| ALPACA bridge | `curl :5555/api/v1/telescope/0/connected` | Returns telescope state |
+| Native ALPACA reach | `curl :8503/api/telescope/connected` (proxied to S50 :32323) | Returns telescope state |
 | Roof sidecar health | `curl :8504/health` | 200 OK |
 | Roof open | `POST :8504/roof/open` | Physical switch flips on, response `{ok:true, state:"open"}` |
 | Roof close | `POST :8504/roof/close` | Physical switch flips off, response `{ok:true, state:"closed"}` |
@@ -353,11 +341,10 @@ This finishes the SeestarScope arc that started Feb 2026: dev-box prototype → 
 ## 12. Infrastructure Notes
 
 - **Jetson @ 192.168.0.234**: JetPack R36.4.7, Docker 29.1.3, Node 22.22.0, 8GB unified RAM (~6GB available post-cleanup), 727GB free on /
-- **Network shape**: Jetson on observatory LAN (192.168.0.0/24). Reaches S50 at 192.168.0.132:32323 (ALPACA) and :4700 (TCP JSON-RPC). Reaches eWeLink switch via zeroconf on the same subnet.
+- **Network shape**: Jetson on observatory LAN (192.168.0.0/24). Reaches S50 at 192.168.0.132:32323 (native ALPACA REST, firmware 7.34+). Reaches eWeLink switch via zeroconf on the same subnet.
 - **Ports used**:
-  - `:5555` — seestar_alp ALPACA bridge
   - `:8501` — Streamlit UI (the one humans hit)
-  - `:8503` — FastAPI backend
+  - `:8503` — FastAPI backend (talks to S50 :32323 directly)
   - `:8504` — eWeLink Node sidecar (internal; backend proxies)
 - **Secrets**: `EWELINK_EMAIL`, `EWELINK_PASSWORD`, `ROOF_DEVICE_ID` in `/opt/roof_control/.env`. Mode 600. Not committed.
 - **Captures volume**: `/opt/seestar_scope/captures` on Jetson NVMe (727GB headroom — months of FITS frames before space matters).

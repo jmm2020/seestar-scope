@@ -18,13 +18,7 @@ Browser
 │  portal backend  :8503  (FastAPI)           │
 │  REST + WebSocket — status, stacking, jobs  │
 └──────────────────┬──────────────────────────┘
-                   │ ASCOM ALPACA REST
-                   ▼
-┌─────────────────────────────────────────────┐
-│  ALP backend  :5555                         │
-│  vendor/seestar_alp — device + scheduler    │
-└──────────────────┬──────────────────────────┘
-                   │ TCP (proprietary Seestar protocol)
+                   │ ASCOM ALPACA REST (native, firmware 7.34+)
                    ▼
              Seestar S50
           192.168.0.132:32323
@@ -34,14 +28,13 @@ Browser
 |---------|------|-------|
 | portal (Streamlit) | 8502 | Main control UI |
 | portal backend (FastAPI) | 8503 | REST + WebSocket; published to host for browser WS |
-| ALP backend | 5555 | ASCOM ALPACA proxy to S50 |
 | seestar-enhance | 8504 | AI post-stack (GraXpert + StarNet++) — UCIS-v1 service |
 
 ## Quick Start — Docker Compose
 
 ```bash
-# Clone with submodule
-git clone --recurse-submodules git@github.com:jmm2020/seestar-scope.git
+# Clone
+git clone git@github.com:jmm2020/seestar-scope.git
 cd seestar-scope
 
 # Configure environment
@@ -60,16 +53,12 @@ docker compose logs -f
 ## Quick Start — Workstation Dev
 
 ```bash
-# Clone with submodule
-git clone --recurse-submodules git@github.com:jmm2020/seestar-scope.git
+# Clone
+git clone git@github.com:jmm2020/seestar-scope.git
 cd seestar-scope
 
-# Start ALP backend
-cd vendor/seestar_alp
-python3 device/seestar_device.py
-
-# In another terminal — start portal
-cd ../../portal
+# Start portal (talks directly to the S50's native ALPACA at :32323)
+cd portal
 pip install -r requirements.txt
 streamlit run app.py --server.port 8502
 ```
@@ -89,14 +78,3 @@ See `docs/jetson_build_notes.md` for ARM64 dependency verification and `docker b
 
 When ready to cut over from workstation to Jetson, follow `docs/migration_runbook.md`
 (pre-flight checklist, `scripts/smoke_test.sh` validation, rollback procedure).
-
-## Attribution
-
-`vendor/seestar_alp` is a git submodule pointing to
-[smart-underworld/seestar_alp](https://github.com/smart-underworld/seestar_alp)
-pinned to commit `7bed951` (March 1 2026).
-
-The upstream project is distributed under its own licence — see
-`vendor/seestar_alp/LICENSE.txt` and `vendor/seestar_alp/LICENSE-Seestar_Alp.txt`.
-This repo does not fork or modify ALP source; it uses the submodule strategy to
-preserve clean licensing and allow upstream tracking when desired.

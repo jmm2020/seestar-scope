@@ -1,19 +1,19 @@
 # SeestarScope — System Architecture
 
-> Documents the system **as it runs today** (2026-05-06).
+> Documents the **target architecture** (2026-05-12).
+> Firmware 7.34+ Seestar S50 exposes ALPACA natively on `:32323`; the portal talks to it directly.
 
 ## Overview
 
-Three-service bridge-network design (unified `docker-compose.yml` at repo root):
+Two-service bridge-network design (unified `docker-compose.yml` at repo root):
 
 | Service | Source | Container Name | Port |
 |---------|--------|----------------|------|
 | **seestar-portal-ui** (Streamlit UI) | `portal/` in this repo | `seestar-portal-ui` | :8502 |
 | **seestar-portal-backend** (FastAPI) | `portal/backend/` | `seestar-portal-backend` | :8503 |
-| **seestar-alp** (ALP backend) | `vendor/seestar_alp` (submodule, pinned `7bed951`) | `seestar-alp` | :5555 (internal) |
 | **seestar-enhance** | `UCIS-v1:src/services/seestar_enhance` | separate service | :8504 |
 
-All three Docker services share the `seestar-net` bridge network. Both the UI (`:8502`) and portal backend (`:8503`) are published to the host; 8503 is accessed directly by the browser for WebSocket connections.
+Both Docker services share the `seestar-net` bridge network. Both the UI (`:8502`) and portal backend (`:8503`) are published to the host; 8503 is accessed directly by the browser for WebSocket connections. The portal backend reaches the Seestar S50 directly at `192.168.0.132:32323` (ALPACA REST) on the LAN — no bridge container.
 
 ## Network Topology
 
@@ -23,17 +23,15 @@ LAN (192.168.0.x)
   ├── Workstation (or Jetson Orin)
   │     └── Docker bridge: seestar-net
   │           ├── seestar-portal-ui      → host:8502  (Streamlit)
-  │           ├── seestar-portal-backend → host:8503  (FastAPI — REST + WebSocket, published to host)
-  │           └── seestar-alp            → :5555      (ALPACA — internal only)
+  │           └── seestar-portal-backend → host:8503  (FastAPI — REST + WebSocket, published to host)
   │     └── seestar-enhance  →  host:8504  (FastAPI + CUDA — separate service)
   │
   └── Seestar S50
-        └── 192.168.0.132:32323  (proprietary TCP)
+        └── 192.168.0.132:32323  (native ALPACA REST)
 ```
 
 The portal UI talks to the portal backend via `http://seestar-portal-backend:8503` (container DNS).
-The portal backend talks to `seestar-alp` via `http://seestar-alp:5555` (ASCOM ALPACA).
-The ALP backend talks to the S50 directly via TCP.
+The portal backend talks to the S50 directly at `http://192.168.0.132:32323` (native ALPACA REST — firmware 7.34+).
 `seestar-enhance` is a standalone service called by the portal for post-stack processing.
 
 ## Portal Stack (`portal/`)
@@ -88,7 +86,7 @@ The FastAPI backend (`seestar-portal-backend`, port `:8503`) handles all persist
 | `routers/sessions.py` | Sessions CRUD — 6 endpoints under `/api/sessions` (note: also registered at `main.py:102` with explicit prefix) |
 | `routers/conditions.py` | Observing conditions — `/api/conditions/current` + `/api/conditions/forecast` |
 | `routers/status_ws.py` | WebSocket status stream + `/api/status/connections` REST endpoint |
-| `routers/telescope.py` | Full ALPACA bridge — `/api/telescope/*` (telescope, camera, focuser, filter, dew-heater, Stellarium passthrough) |
+| `routers/telescope.py` | ALPACA passthrough to S50 native ALPACA at `:32323` — `/api/telescope/*` (telescope, camera, focuser, filter, dew-heater, Stellarium passthrough) |
 | `routers/stacking.py` | Stacking session pipeline — `POST /api/stacking/{start,add-frame,process,abort}`, `GET /api/stacking/{status,config}` |
 | `routers/processing.py` | Legacy Siril processing pipeline — `/api/processing/*`; imports `app/services/siril_service.py` |
 | `services/postprocessing_service.py` | Enhancement pipeline: calibration frame management + `apply_pipeline()` |
@@ -113,24 +111,6 @@ All env vars override their `config.toml` counterparts.
 | `SITE_LON` | `-123.45` | Observing site longitude (°E positive) |
 | `SITE_ELEVATION_M` | `0.0` | Site elevation in metres |
 | `SITE_NAME` | `My Observatory` | Display name for the site |
-| `ALP_HOST` | `seestar-alp` (Docker) / `localhost` (dev) | Portal → ALP bridge hostname. Legacy alias: `SEESTAR_ALP_HOST` (lower priority). |
-| `ALP_PORT` | `5555` | Portal → ALP bridge port. Legacy alias: `SEESTAR_ALP_PORT`. |
-| `ALP_IMG_PORT` | `7556` | ALP image stream port. Legacy alias: `SEESTAR_IMG_PORT`. |
-
-## ALP Backend (`vendor/seestar_alp` submodule)
-
-Pin: `7bed951` (smart-underworld/seestar_alp, 2026-03-01)
-
-Key directories:
-
-| Dir | Purpose |
-|-----|---------|
-| `device/` | Core S50 TCP protocol implementation |
-| `front/` | ALP's own web UI (not used by this portal) |
-| `imaging/` | Imaging pipeline |
-| `docker/` | Docker configs |
-
-The ALP backend exposes an ASCOM ALPACA REST API on `:5555`.
 
 ## Stacking Service
 
@@ -194,7 +174,7 @@ Separate service in `UCIS-v1:src/services/seestar_enhance` — not checked into 
 
 ## Jetson Orin Deployment
 
-Jetson Orin runs the portal + ALP backend (no GPU required for these two; seestar-enhance stays on workstation for now).
+Jetson Orin runs the portal (UI + FastAPI backend, no GPU required; seestar-enhance stays on workstation for now).
 
 Deployment artefacts live in `deploy/jetson/` in this repo (generated from `UCIS-v1:projects/seestar-scope/deploy/jetson/`):
 - `setup.sh` — idempotent one-shot installer (Docker + clone + build + systemd)
@@ -212,16 +192,13 @@ User (browser)
   ▼
 portal views/imaging.py
   │ POST /api/sessions/ (auto-create session)       ← NEW
-  │ POST /api/v1/camera/0/startexposure
-  ▼
-ALP backend (ALPACA)
-  │ S50 TCP command
+  │ POST /api/v1/camera/0/startexposure  → 192.168.0.132:32323 (native ALPACA)
   ▼
 Seestar S50 hardware
-  │ raw frame over TCP
+  │ exposes ALPACA REST natively on :32323
   ▼
-ALP backend
-  │ GET /api/v1/camera/0/imagearray
+portal backend
+  │ GET /api/v1/camera/0/imagearray  → 192.168.0.132:32323
   ▼
 portal utils/image_processing.py
   │ normalize → PIL Image → apply_stretch()
@@ -271,7 +248,7 @@ GitHub Actions CI runs on every push/PR to `main` via `.github/workflows/ci.yml`
 
 | Step | Command | What it checks |
 |------|---------|----------------|
-| Lint | `ruff check portal/` | Code quality (portal only — vendor code excluded) |
+| Lint | `ruff check portal/` | Code quality |
 | Build | `docker compose build` | All three Docker images build on linux/amd64 |
 | Test | `pytest portal/tests/ -m "not hardware"` | Unit tests pass (hardware-dependent tests skipped) |
 
@@ -325,7 +302,6 @@ The Streamlit UI's live-stack panel (`views/imaging.py`) connects directly from 
 |------|---------|----------|
 | 8502 | portal (Streamlit) | HTTP |
 | 8503 | portal backend (FastAPI) | HTTP REST + WebSocket |
-| 5555 | ALP backend (ASCOM ALPACA) | HTTP REST |
 | 8504 | seestar-enhance | HTTP REST |
 | 8091 | Stellarium Remote Control | HTTP REST |
-| 32323 | Seestar S50 | TCP (proprietary) |
+| 32323 | Seestar S50 (native ALPACA) | HTTP REST |
