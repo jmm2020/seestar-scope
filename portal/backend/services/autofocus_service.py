@@ -232,7 +232,7 @@ class AutoFocusService:
             Raw image data as numpy array
         """
         # Start exposure
-        self.alpaca.start_exposure(duration=self.config.exposure_time, light=True)
+        self.alpaca.start_exposure(duration_seconds=self.config.exposure_time, light=True)
 
         # Wait for exposure to complete
         await asyncio.sleep(self.config.exposure_time + 0.5)
