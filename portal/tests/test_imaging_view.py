@@ -152,24 +152,21 @@ def test_live_stack_panel_shown_when_stacking(monkeypatch):
 
     panel_calls = []
 
-    with (
-        patch.object(st, "header"),
-        patch.object(st, "divider"),
-        patch.object(st, "error"),
-        patch("views.imaging._render_live_view"),
-        patch("views.imaging._render_session_status", return_value=({}, True)),
-        patch("views.imaging._render_live_stack_panel", side_effect=lambda: panel_calls.append(1)),
-        patch("views.imaging._render_stacking_controls"),
-        patch("views.imaging._render_stack_settings"),
-        patch("views.imaging._render_camera_status"),
-        patch("views.imaging._render_exposure_controls", return_value=(1000, 80)),
-        patch("views.imaging._render_capture_controls"),
-        patch("views.imaging._poll_exposure"),
-        patch("views.imaging._render_preview_and_save"),
-        patch.object(st, "expander", side_effect=lambda *a, **kw: _expander_mock()),
-    ):
+    with patch.object(st, "header"), \
+         patch.object(st, "divider"), \
+         patch.object(st, "error"), \
+         patch("views.imaging._render_live_view"), \
+         patch("views.imaging._render_session_status", return_value=({}, True)), \
+         patch("views.imaging._render_live_stack_panel", side_effect=lambda: panel_calls.append(1)), \
+         patch("views.imaging._render_stacking_controls"), \
+         patch("views.imaging._render_stack_settings"), \
+         patch("views.imaging._render_camera_status"), \
+         patch("views.imaging._render_exposure_controls", return_value=(1000, 80)), \
+         patch("views.imaging._render_capture_controls"), \
+         patch("views.imaging._poll_exposure"), \
+         patch("views.imaging._render_preview_and_save"), \
+         patch.object(st, "expander", side_effect=lambda *a, **kw: _expander_mock()):
         from views.imaging import render_imaging
-
         render_imaging(client, MagicMock())
 
     assert len(panel_calls) == 1
@@ -184,24 +181,21 @@ def test_live_stack_panel_hidden_when_not_stacking(monkeypatch):
 
     panel_calls = []
 
-    with (
-        patch.object(st, "header"),
-        patch.object(st, "divider"),
-        patch.object(st, "error"),
-        patch("views.imaging._render_live_view"),
-        patch("views.imaging._render_session_status", return_value=(None, False)),
-        patch("views.imaging._render_live_stack_panel", side_effect=lambda: panel_calls.append(1)),
-        patch("views.imaging._render_stacking_controls"),
-        patch("views.imaging._render_stack_settings"),
-        patch("views.imaging._render_camera_status"),
-        patch("views.imaging._render_exposure_controls", return_value=(1000, 80)),
-        patch("views.imaging._render_capture_controls"),
-        patch("views.imaging._poll_exposure"),
-        patch("views.imaging._render_preview_and_save"),
-        patch.object(st, "expander", side_effect=lambda *a, **kw: _expander_mock()),
-    ):
+    with patch.object(st, "header"), \
+         patch.object(st, "divider"), \
+         patch.object(st, "error"), \
+         patch("views.imaging._render_live_view"), \
+         patch("views.imaging._render_session_status", return_value=(None, False)), \
+         patch("views.imaging._render_live_stack_panel", side_effect=lambda: panel_calls.append(1)), \
+         patch("views.imaging._render_stacking_controls"), \
+         patch("views.imaging._render_stack_settings"), \
+         patch("views.imaging._render_camera_status"), \
+         patch("views.imaging._render_exposure_controls", return_value=(1000, 80)), \
+         patch("views.imaging._render_capture_controls"), \
+         patch("views.imaging._poll_exposure"), \
+         patch("views.imaging._render_preview_and_save"), \
+         patch.object(st, "expander", side_effect=lambda *a, **kw: _expander_mock()):
         from views.imaging import render_imaging
-
         render_imaging(client, MagicMock())
 
     assert len(panel_calls) == 0

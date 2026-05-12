@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StackingConfig:
     """Configuration for a Siril stacking session."""
-
     target_name: str = "target"
     exposure_time: float = 10.0  # seconds per frame (metadata only)
     gain: int = 80
@@ -58,7 +57,6 @@ class StackingConfig:
 @dataclass
 class StackingResult:
     """Complete stacking run result."""
-
     success: bool
     session_id: str
     frame_count: int
@@ -142,8 +140,7 @@ class StackingService:
         self._session_id = uuid.uuid4().hex
         logger.info(
             "Started stacking session %s (target=%s)",
-            self._session_id,
-            self._config.target_name,
+            self._session_id, self._config.target_name,
         )
         return self._session_id
 
@@ -247,7 +244,8 @@ class StackingService:
 
             if returncode != 0:
                 raise RuntimeError(
-                    f"siril-cli exited with code {returncode}: {(stderr or stdout)[:500]}"
+                    f"siril-cli exited with code {returncode}: "
+                    f"{(stderr or stdout)[:500]}"
                 )
             if self._abort_requested:
                 raise RuntimeError("Aborted")
@@ -269,7 +267,9 @@ class StackingService:
                 shutil.move(str(stacked_jpeg), str(final_jpeg))
 
             if final_fits is None:
-                raise RuntimeError("Siril completed without producing expected stacked FITS")
+                raise RuntimeError(
+                    "Siril completed without producing expected stacked FITS"
+                )
 
             self._progress = 1.0
             duration = (datetime.now() - start_time).total_seconds()
@@ -287,9 +287,7 @@ class StackingService:
             self._current_result = result
             logger.info(
                 "Stacking session %s complete: %d frames → %s",
-                session_id,
-                len(converted_paths),
-                final_fits,
+                session_id, len(converted_paths), final_fits,
             )
             return result
 
@@ -421,25 +419,23 @@ class StackingService:
             lines.append("preprocess light -debayer")
             lines.append("")
 
-        lines.extend(
-            [
-                "# Register frames (star alignment)",
-                "register pp_light -drizzle",
-                "",
-                "# Stack with sigma-clipping rejection",
-                f"stack r_pp_light rej {sigma_low} {sigma_high} -norm=addscale -out=stacked",
-                "",
-                "# AutoStretch for visibility",
-                "load stacked",
-                "autostretch -sc -targetbg 0.25",
-                f"save {target}_stacked",
-                "",
-                "# Export JPEG for gallery",
-                f"savejpg {target}_stacked -quality=95",
-                "",
-                "close",
-            ]
-        )
+        lines.extend([
+            "# Register frames (star alignment)",
+            "register pp_light -drizzle",
+            "",
+            "# Stack with sigma-clipping rejection",
+            f"stack r_pp_light rej {sigma_low} {sigma_high} -norm=addscale -out=stacked",
+            "",
+            "# AutoStretch for visibility",
+            "load stacked",
+            "autostretch -sc -targetbg 0.25",
+            f"save {target}_stacked",
+            "",
+            "# Export JPEG for gallery",
+            f"savejpg {target}_stacked -quality=95",
+            "",
+            "close",
+        ])
 
         script_path.write_text("\n".join(lines))
         logger.info("Generated stacking SSF: %s", script_path)
@@ -456,10 +452,8 @@ class StackingService:
         """
         # SIRIL_BIN may include flags ("flatpak run ..."), so split via shlex
         cmd = shlex.split(self._siril_bin) + [
-            "-d",
-            str(working_dir),
-            "-s",
-            str(script_path),
+            "-d", str(working_dir),
+            "-s", str(script_path),
         ]
 
         logger.info("Invoking siril: %s", " ".join(cmd))

@@ -34,7 +34,6 @@ def _rand_pil(size=(16, 16), mode="RGB", seed=42) -> Image.Image:
 # Output-range invariant: all stretch functions must stay in [0, 1]
 # ---------------------------------------------------------------------------
 
-
 @pytest.mark.parametrize("fn", [stretch_histogram, stretch_stf, stretch_arcsinh])
 def test_stretch_output_range_rgb(fn):
     data = _rand_image()
@@ -54,7 +53,6 @@ def test_stretch_output_range_mono(fn):
 # ---------------------------------------------------------------------------
 # GHS-specific tests
 # ---------------------------------------------------------------------------
-
 
 def test_stretch_ghs_identity_when_D_zero():
     data = _rand_image(seed=1)
@@ -88,7 +86,6 @@ def test_stretch_ghs_mono_same_shape():
 # balance_color
 # ---------------------------------------------------------------------------
 
-
 def test_balance_color_noop_for_mono():
     data = np.full((16, 16), 0.5, dtype=np.float64)
     np.testing.assert_array_equal(balance_color(data), data)
@@ -104,7 +101,6 @@ def test_balance_color_output_range():
 # ---------------------------------------------------------------------------
 # run_pipeline
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.parametrize("stretch_key", ["histogram", "stf", "ghs", "arcsinh", "none"])
 def test_run_pipeline_all_stretch_modes(stretch_key):

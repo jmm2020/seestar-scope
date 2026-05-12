@@ -114,10 +114,7 @@ class PostprocessingService:
         except OSError as exc:
             logger.error(
                 "Failed to copy calibration frame %s from %s to %s: %s",
-                frame_type,
-                src,
-                dest,
-                exc,
+                frame_type, src, dest, exc,
             )
             return False
         setattr(self._calibration, f"{frame_type}_path", str(dest))

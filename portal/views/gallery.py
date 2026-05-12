@@ -262,9 +262,7 @@ def render_image_card(image: Dict[str, Any], pp_healthy: bool = False):
                             detail = resp.json().get("detail", resp.text)
                         except Exception:
                             detail = f"HTTP {resp.status_code}"
-                        logger.error(
-                            "Processing request failed (HTTP %s): %s", resp.status_code, resp.text
-                        )
+                        logger.error("Processing request failed (HTTP %s): %s", resp.status_code, resp.text)
                         st.error(f"Processing failed: {detail}")
                 except Exception as exc:
                     st.error(f"Processing request failed: {exc}")

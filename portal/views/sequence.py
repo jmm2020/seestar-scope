@@ -277,9 +277,7 @@ def _render_run_controls(alpaca):
                 _sc = SessionsClient()
                 result = _sc.end_session(sid)
                 if result is None:
-                    logger.warning(
-                        f"Session {sid} end_session failed; session may appear open in history"
-                    )
+                    logger.warning(f"Session {sid} end_session failed; session may appear open in history")
                 st.session_state["seq_session_id"] = None
             st.warning("Sequence stopped")
 
@@ -324,9 +322,7 @@ def _execute_sequence_step(alpaca):
             _sc = SessionsClient()
             result = _sc.end_session(sid)
             if result is None:
-                logger.warning(
-                    f"Session {sid} end_session failed; session may appear open in history"
-                )
+                logger.warning(f"Session {sid} end_session failed; session may appear open in history")
             st.session_state["seq_session_id"] = None
         st.success("Sequence complete!")
         st.balloons()

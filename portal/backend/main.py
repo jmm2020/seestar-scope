@@ -70,6 +70,7 @@ async def lifespan(app: FastAPI):
     close_database()
     close_sessions_database()
 
+
     if conditions._conditions_service is not None:
         conditions._conditions_service.close()
 
@@ -100,8 +101,9 @@ app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in rou
 app.include_router(postprocessing.router)  # prefix="/api/postprocessing" defined in router
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(conditions.router)  # prefix="/api/conditions" defined in router
-app.include_router(stacking.router)  # prefix="/api/stacking" defined in router
+app.include_router(stacking.router)    # prefix="/api/stacking" defined in router
 app.include_router(status_ws.router)  # WebSocket: live telescope status stream
+
 
 
 @app.get("/")

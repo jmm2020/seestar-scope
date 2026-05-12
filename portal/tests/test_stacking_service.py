@@ -1,5 +1,4 @@
 """Tests for StackingService — no hardware, no actual Siril invocation."""
-
 import asyncio
 import sys
 from pathlib import Path
@@ -194,9 +193,7 @@ def test_run_stacking_subprocess_failure(tmp_path, monkeypatch):
     result = asyncio.run(service.run_stacking())
 
     assert result.success is False
-    assert "siril-cli exited" in (result.error_message or "") or "code 1" in (
-        result.error_message or ""
-    )
+    assert "siril-cli exited" in (result.error_message or "") or "code 1" in (result.error_message or "")
     assert service.is_running is False  # finally block resets it
 
 
@@ -255,7 +252,9 @@ def test_run_stacking_happy_path(tmp_path, monkeypatch):
 
 def test_convert_fits_passthrough(tmp_path):
     """Existing .fit files are copied as-is without conversion."""
-    service = StackingService(data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery"))
+    service = StackingService(
+        data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery")
+    )
     src = tmp_path / "frame.fit"
     src.write_bytes(b"FAKEFIT")
     session_dir = tmp_path / "session"
@@ -270,7 +269,9 @@ def test_convert_fits_passthrough(tmp_path):
 
 def test_convert_png_to_fits(tmp_path):
     """PNG frames are converted to FITS via PIL/astropy."""
-    service = StackingService(data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery"))
+    service = StackingService(
+        data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery")
+    )
     img = Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8))
     src = tmp_path / "frame.png"
     img.save(str(src))
@@ -286,7 +287,9 @@ def test_convert_png_to_fits(tmp_path):
 
 def test_convert_skips_bad_frame(tmp_path):
     """A corrupt frame is skipped; valid frames still convert."""
-    service = StackingService(data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery"))
+    service = StackingService(
+        data_root=str(tmp_path), gallery_dir=str(tmp_path / "gallery")
+    )
     bad = tmp_path / "bad.png"
     bad.write_bytes(b"not an image")
 

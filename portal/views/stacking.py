@@ -4,7 +4,6 @@ Streamlit interface for the StackingService. Mirrors the autofocus view:
 backend health check → status poll → config panel → controls → result.
 Calls FastAPI backend at BACKEND_URL/api/stacking/*.
 """
-
 import logging
 import os
 import time
@@ -34,7 +33,8 @@ def render_stacking(alpaca, config):
 
     if not check_backend_health():
         st.error(
-            f"⚠️ Backend API is not reachable at {BACKEND_URL}. Start the FastAPI backend first."
+            f"⚠️ Backend API is not reachable at {BACKEND_URL}. "
+            "Start the FastAPI backend first."
         )
         st.code(
             "cd backend && uvicorn main:app --host 0.0.0.0 --port 8503",
@@ -392,7 +392,10 @@ def process_stack() -> None:
         if status and (status.get("running") or (latest and latest.get("success"))):
             st.success("✅ Siril stacking started")
         else:
-            st.warning("Dispatch succeeded but service is not yet running — check backend logs")
+            st.warning(
+                "Dispatch succeeded but service is not yet running — "
+                "check backend logs"
+            )
         st.rerun()
     except Exception as exc:
         logger.error("Error processing stack: %s", exc)

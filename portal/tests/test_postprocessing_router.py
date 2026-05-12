@@ -17,7 +17,6 @@ from backend.services.postprocessing_service import PostprocessingResult
 # _result_to_response status mapping
 # ---------------------------------------------------------------------------
 
-
 def test_result_to_response_unknown_when_none():
     resp = _result_to_response("j1", None)
     assert resp.status == "unknown"
@@ -66,7 +65,6 @@ def test_result_to_response_pending_never_produced():
 # PostprocessingRequest path validator
 # ---------------------------------------------------------------------------
 
-
 def test_image_path_validator_rejects_etc_passwd(tmp_path, monkeypatch):
     import backend.routers.postprocessing as router_mod
     from pydantic import ValidationError
@@ -109,7 +107,6 @@ def test_image_path_validator_allows_captures_dir(tmp_path, monkeypatch):
 # processing_jobs capping
 # ---------------------------------------------------------------------------
 
-
 def test_processing_jobs_capped_at_max(tmp_path, monkeypatch):
     import backend.routers.postprocessing as router_mod
 
@@ -120,7 +117,9 @@ def test_processing_jobs_capped_at_max(tmp_path, monkeypatch):
     # Fill beyond the cap
     for i in range(7):
         job_id = f"pp_{i:08x}"
-        router_mod.processing_jobs[job_id] = PostprocessingResult(success=False, job_id=job_id)
+        router_mod.processing_jobs[job_id] = PostprocessingResult(
+            success=False, job_id=job_id
+        )
         if len(router_mod.processing_jobs) > router_mod._MAX_JOBS:
             router_mod.processing_jobs.popitem(last=False)
 

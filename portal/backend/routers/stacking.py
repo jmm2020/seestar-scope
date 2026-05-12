@@ -44,11 +44,8 @@ def get_stacking_service(request: Request) -> StackingService:
 
 class StackingConfigRequest(BaseModel):
     """Stacking session configuration."""
-
     target_name: str = Field("target", description="Target object name (used in output filenames)")
-    exposure_time: float = Field(
-        10.0, ge=0.1, le=300.0, description="Exposure per frame (metadata only)"
-    )
+    exposure_time: float = Field(10.0, ge=0.1, le=300.0, description="Exposure per frame (metadata only)")
     gain: int = Field(80, ge=0, le=400, description="Sensor gain metadata")
     dark_path: Optional[str] = Field(None, description="Path to master dark frame")
     flat_path: Optional[str] = Field(None, description="Path to master flat frame")
@@ -59,13 +56,11 @@ class StackingConfigRequest(BaseModel):
 
 class AddFrameRequest(BaseModel):
     """Request body for /add-frame."""
-
     path: str = Field(..., description="Filesystem path to a captured frame")
 
 
 class StackingResultResponse(BaseModel):
     """Stacking pipeline result."""
-
     success: bool
     session_id: str
     frame_count: int
@@ -78,7 +73,6 @@ class StackingResultResponse(BaseModel):
 
 class StackingStatusResponse(BaseModel):
     """Current stacking service status."""
-
     running: bool
     session_id: Optional[str] = None
     frame_count: int = 0
@@ -147,9 +141,7 @@ async def add_frame(payload: AddFrameRequest, request: Request):
     service = get_stacking_service(request)
 
     if not service.session_id:
-        raise HTTPException(
-            status_code=404, detail="No active stacking session — call /start first"
-        )
+        raise HTTPException(status_code=404, detail="No active stacking session — call /start first")
 
     appended = service.add_frame(payload.path)
     if not appended:
