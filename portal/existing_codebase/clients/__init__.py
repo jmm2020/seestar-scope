@@ -1,1 +1,0 @@
-"""SeestarScope API clients."""

@@ -9,6 +9,13 @@ services:
       - seestar-net
     ports:
       - "5555:5555"
+      # MJPEG live-view stream — the imaging page builds an <img src=...:7556/0/vid>
+      # URL that the browser fetches directly, so the port must be published.
+      # Browser → http://<jetson-ip>:7556/0/vid → seestar_alp MJPEG endpoint.
+      # Note: for Cloudflare-tunnel access (s50.jmm2020ai.com), the stream needs
+      # to be proxied through the Streamlit/backend container — Cloudflare only
+      # proxies the tunnel's HTTPS port, not arbitrary container ports.
+      - "7556:7556"
     environment:
       - TZ=${TZ:-America/New_York}
     volumes:

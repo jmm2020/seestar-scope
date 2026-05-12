@@ -1,21 +1,13 @@
-"""Shared client instances for ALPACA and Stellarium
+"""Shared client instances for ALPACA and Stellarium.
 
-Imports the existing AlpacaClient and StellariumClient from the Streamlit codebase.
-Provides singleton instances for the backend to use.
+Imports AlpacaClient and StellariumClient from the canonical portal/clients/
+package (the same code Streamlit uses) and provides singletons for the backend.
 """
-
-import sys
-from pathlib import Path
-
-# Add existing_codebase to path to import clients
-existing_code_path = Path(__file__).parent.parent / "existing_codebase"
-sys.path.insert(0, str(existing_code_path))
 
 from clients.alpaca_client import AlpacaClient
 from clients.stellarium_client import StellariumClient
 from backend.config import settings
 
-# Singleton instances
 _alpaca_client = None
 _stellarium_client = None
 

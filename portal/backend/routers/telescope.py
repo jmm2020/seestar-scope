@@ -121,10 +121,15 @@ async def park_telescope(request: Request):
 
 @router.post("/unpark")
 async def unpark_telescope(request: Request):
-    """Unpark the telescope"""
+    """Unpark (open) the telescope.
+
+    ALPACA standard /unpark is a no-op stub in seestar_alp — it returns success
+    but never engages the arm motor. The firmware-correct path is the named
+    action `action_start_up_sequence`, which physically unfolds the arm.
+    """
     alpaca = request.app.state.alpaca
     try:
-        resp = alpaca.unpark()
+        resp = alpaca.start_up_sequence()
         if resp.success:
             return {"success": True, "message": "Telescope unparked"}
         else:

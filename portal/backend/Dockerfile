@@ -30,8 +30,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code (preserving backend/ directory structure)
 COPY backend /app/backend
 
-# Copy existing_codebase for client imports
-COPY existing_codebase /app/existing_codebase
+# Copy the canonical clients/ package (same code Streamlit imports).
+# Previously the backend imported from a stale snapshot at existing_codebase/clients/
+# which silently drifted from portal/clients/ — see commit history (#39, #38, #41).
+COPY clients /app/clients
 
 # Copy shared utils so postprocessing_service can import utils.image_enhancement
 COPY utils /app/utils
