@@ -35,6 +35,7 @@ MODE_LABELS = {
 
 try:
     from backend.config import settings as _backend_settings
+
     BACKEND_PORT = _backend_settings.port  # sourced from config.py / .env
 except Exception:
     BACKEND_PORT = 8503
@@ -369,7 +370,9 @@ def _render_stacking_controls(alpaca, view, is_stacking):
                     st.warning(
                         f"Session {sid} could not be closed in history — backend unreachable"
                     )
-                    logger.warning(f"Session {sid} end_session failed; session may appear open in history")
+                    logger.warning(
+                        f"Session {sid} end_session failed; session may appear open in history"
+                    )
                 else:
                     logger.info(f"Session {sid} ended")
                 st.session_state["active_session_id"] = None

@@ -21,6 +21,7 @@ Verified live against firmware 7.34 at 192.168.0.132:4800 on 2026-05-13.
 Wire format reference: vendor/seestar_alp/device/protocols/binary.py:116 and
 vendor/seestar_alp/device/protocols/imager.py:263.
 """
+
 from __future__ import annotations
 
 import io
@@ -75,9 +76,7 @@ class StackedFrame:
         return bytes(buf)
 
 
-def _decode_raw_to_bgr(
-    raw: bytes, width: int, height: int, fmt: str
-) -> Optional[np.ndarray]:
+def _decode_raw_to_bgr(raw: bytes, width: int, height: int, fmt: str) -> Optional[np.ndarray]:
     if fmt == "rgb16":
         expected = width * height * 6
         if len(raw) != expected:
@@ -118,7 +117,9 @@ class SeestarImagerClient:
                 sock.close()
             except OSError:
                 pass
-            raise SeestarImagerError(f"socket connect to {self.host}:{self.port} failed: {exc}") from exc
+            raise SeestarImagerError(
+                f"socket connect to {self.host}:{self.port} failed: {exc}"
+            ) from exc
         return sock
 
     def close(self) -> None:
@@ -155,7 +156,9 @@ class SeestarImagerClient:
                     )
                 data = self._recv_exact(sock, size)
                 raw, raw_format = self._unzip_and_classify(data, width, height)
-                return StackedFrame(width=width, height=height, raw_data=raw, frame_format=raw_format)
+                return StackedFrame(
+                    width=width, height=height, raw_data=raw, frame_format=raw_format
+                )
             except OSError as exc:
                 raise SeestarImagerError(f"socket error during stacked-frame fetch: {exc}") from exc
             finally:
@@ -182,9 +185,7 @@ class SeestarImagerClient:
         while len(buf) < n:
             chunk = sock.recv(n - len(buf))
             if not chunk:
-                raise SeestarImagerError(
-                    f"socket closed after {len(buf)} of {n} expected bytes"
-                )
+                raise SeestarImagerError(f"socket closed after {len(buf)} of {n} expected bytes")
             buf.extend(chunk)
         return bytes(buf)
 

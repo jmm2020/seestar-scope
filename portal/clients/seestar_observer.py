@@ -99,9 +99,7 @@ class SeestarObserverClient:
                         continue
                     code = obj.get("code", 0)
                     if code != 0:
-                        raise SeestarObserverError(
-                            f"method '{method}' returned code={code}"
-                        )
+                        raise SeestarObserverError(f"method '{method}' returned code={code}")
                     return obj.get("result")
             raise SeestarObserverError(
                 f"timed out after {self.timeout}s waiting for id={cid} ({method})"

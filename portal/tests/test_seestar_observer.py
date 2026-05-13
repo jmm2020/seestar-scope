@@ -181,9 +181,7 @@ def test_get_focuser_position_returns_none_for_unexpected_type():
 
 
 def test_non_zero_code_raises():
-    server = FakeScopeServer(
-        lambda req: {"code": 103, "result": None, "method": req["method"]}
-    )
+    server = FakeScopeServer(lambda req: {"code": 103, "result": None, "method": req["method"]})
     try:
         c = SeestarObserverClient("127.0.0.1", port=server.port)
         with pytest.raises(SeestarObserverError, match="code=103"):
@@ -410,9 +408,7 @@ def test_set_stack_lp_filter_off_sends_false():
 
 def test_write_method_error_propagates():
     """If scope returns code != 0 on a write method, SeestarObserverError is raised."""
-    server = FakeScopeServer(
-        lambda req: {"code": 103, "result": None, "method": req["method"]}
-    )
+    server = FakeScopeServer(lambda req: {"code": 103, "result": None, "method": req["method"]})
     try:
         c = SeestarObserverClient("127.0.0.1", port=server.port)
         with pytest.raises(SeestarObserverError, match="code=103"):

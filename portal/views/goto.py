@@ -11,7 +11,6 @@ from utils.coordinates import format_ra, format_dec, parse_ra, parse_dec
 from catalog.messier import lookup_messier, search_catalog
 from config_loader import load_config
 from views.slew_helpers import (
-    DEFAULT_TRANSITION_TIMEOUT_S,
     ensure_unparked,
     format_slew_error,
     poll_state_transition,
@@ -422,9 +421,7 @@ def _render_mount_controls(alpaca):
                     st.success("Scope is at home.")
                     st.rerun()
                 else:
-                    st.warning(
-                        "Find Home accepted but at_home state hasn't reported True yet."
-                    )
+                    st.warning("Find Home accepted but at_home state hasn't reported True yet.")
             else:
                 st.error(f"Find Home failed: {resp.error_message}")
     with col_track:
