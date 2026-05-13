@@ -105,7 +105,6 @@ class SeestarImagerClient:
         self.port = port
         self.timeout = timeout
         self._lock = threading.Lock()
-        self._sock: Optional[socket.socket] = None
 
     # --- socket lifecycle ----------------------------------------------------
 
@@ -123,52 +122,47 @@ class SeestarImagerClient:
         return sock
 
     def close(self) -> None:
-        with self._lock:
-            sock, self._sock = self._sock, None
-        if sock is not None:
-            try:
-                sock.close()
-            except OSError:
-                pass
+        """No-op retained for API compatibility — sockets are per-request now."""
 
     # --- public API ----------------------------------------------------------
 
     def request_stacked_frame(self) -> Optional[StackedFrame]:
         """Ask the scope for the current stacked frame.
 
-        Returns None if no stacking session is active or no frame is ready yet.
-        Raises SeestarImagerError on socket / protocol / decode failures.
+        The scope's :4800 protocol is one-shot — it closes the TCP connection
+        after sending each response — so every call opens a fresh socket and
+        closes it in a finally. Returns None if no stacking session is active
+        or no frame is ready yet. Raises SeestarImagerError on socket /
+        protocol / decode failures.
         """
         with self._lock:
-            if self._sock is None:
-                self._sock = self._open()
-            sock = self._sock
-        try:
-            payload = (json.dumps(REQUEST_STACK) + "\r\n").encode("utf-8")
-            sock.sendall(payload)
-            header = self._recv_exact(sock, HEADER_SIZE)
-            size, frame_id, width, height = self.parse_header(header)
-            if size < EMPTY_PAYLOAD_THRESHOLD:
-                # ack-only / empty response — drain any tiny body, return None
-                if size > 0:
+            sock = self._open()
+            try:
+                payload = (json.dumps(REQUEST_STACK) + "\r\n").encode("utf-8")
+                sock.sendall(payload)
+                header = self._recv_exact(sock, HEADER_SIZE)
+                size, frame_id, width, height = self.parse_header(header)
+                if size < EMPTY_PAYLOAD_THRESHOLD:
+                    # ack-only / empty response — drain any tiny body, return None
+                    if size > 0:
+                        self._recv_exact(sock, size)
+                    return None
+                if frame_id != REQUEST_STACK["id"]:
+                    # Drain and bail; caller can retry
                     self._recv_exact(sock, size)
-                return None
-            if frame_id != REQUEST_STACK["id"]:
-                # Drain and bail; caller can retry
-                self._recv_exact(sock, size)
-                raise SeestarImagerError(
-                    f"frame id mismatch: expected {REQUEST_STACK['id']}, got {frame_id}"
-                )
-            data = self._recv_exact(sock, size)
-            raw, raw_format = self._unzip_and_classify(data, width, height)
-            return StackedFrame(width=width, height=height, raw_data=raw, frame_format=raw_format)
-        except SeestarImagerError:
-            # On protocol error the socket may be in an unknown state — drop it.
-            self.close()
-            raise
-        except OSError as exc:
-            self.close()
-            raise SeestarImagerError(f"socket error during stacked-frame fetch: {exc}") from exc
+                    raise SeestarImagerError(
+                        f"frame id mismatch: expected {REQUEST_STACK['id']}, got {frame_id}"
+                    )
+                data = self._recv_exact(sock, size)
+                raw, raw_format = self._unzip_and_classify(data, width, height)
+                return StackedFrame(width=width, height=height, raw_data=raw, frame_format=raw_format)
+            except OSError as exc:
+                raise SeestarImagerError(f"socket error during stacked-frame fetch: {exc}") from exc
+            finally:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
 
     # --- protocol helpers (static for testability) ---------------------------
 

@@ -179,6 +179,28 @@ def test_request_stacked_frame_raises_on_closed_socket(mock_socket_cls):
 
 
 @patch("clients.seestar_imager.socket.socket")
+def test_request_stacked_frame_opens_fresh_socket_each_call(mock_socket_cls):
+    """The scope's :4800 protocol is one-shot — each poll must open its own socket.
+
+    Regression test for the cache bug that broke /api/imager/stacked.jpg on every
+    poll after the first: the client cached self._sock and reused it, but the
+    scope closes the connection after each response, so the 2nd sendall() hit
+    [Errno 32] Broken pipe and the route returned 502 Bad Gateway.
+    """
+    sock1 = _fake_socket(LIVE_EMPTY_HEADER, b"\x00" * 21)
+    sock2 = _fake_socket(LIVE_EMPTY_HEADER, b"\x00" * 21)
+    mock_socket_cls.side_effect = [sock1, sock2]
+
+    client = SeestarImagerClient("192.168.0.132")
+    assert client.request_stacked_frame() is None
+    assert client.request_stacked_frame() is None
+
+    assert mock_socket_cls.call_count == 2, "second call must open a fresh socket"
+    sock1.close.assert_called()
+    sock2.close.assert_called()
+
+
+@patch("clients.seestar_imager.socket.socket")
 def test_request_stacked_frame_handles_corrupt_zip(mock_socket_cls):
     """A non-zip payload of >=1000 bytes should raise rather than silently corrupt."""
     junk = b"\x00" * 2048
