@@ -415,3 +415,44 @@ def test_write_method_error_propagates():
             c.stop_stack()
     finally:
         server.close()
+
+
+def test_start_stack_returns_false_when_gain_set_fails():
+    """start_stack() returns False (not raises) when iscope_start_stack succeeds but
+    set_control_value fails — scope is stacking but gain was not applied."""
+
+    def handler(req):
+        if req["method"] == "iscope_start_stack":
+            return {"code": 0, "result": None, "method": req["method"]}
+        # set_control_value fails (e.g., firmware doesn't support it as write)
+        return {"code": 103, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        result = c.start_stack(gain=80)
+        assert result is False
+    finally:
+        server.close()
+
+
+def test_start_stack_returns_true_when_both_calls_succeed():
+    """start_stack() returns True when both iscope_start_stack and set_control_value succeed."""
+    server = FakeScopeServer(_ok(None))
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        result = c.start_stack(gain=80)
+        assert result is True
+    finally:
+        server.close()
+
+
+def test_start_stack_raises_when_iscope_start_stack_fails():
+    """start_stack() raises SeestarObserverError when iscope_start_stack itself fails."""
+    server = FakeScopeServer(lambda req: {"code": 103, "result": None, "method": req["method"]})
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        with pytest.raises(SeestarObserverError, match="code=103"):
+            c.start_stack(gain=80)
+    finally:
+        server.close()
