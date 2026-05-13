@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from typing import Any, Optional, Dict, List
 import logging
 
+from .seestar_observer import SeestarObserverClient, SeestarObserverError
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +54,7 @@ class AlpacaClient:
         alp_host: str = None,
         alp_port: int = 5555,
         img_port: int = 7556,
+        observer_port: int = 4701,
     ):
         self.base_url = f"http://{host}:{port}/api/v1"
         # seestar_alp bridge — hosts extended actions (method_sync, method_async)
@@ -63,6 +66,20 @@ class AlpacaClient:
         self._transaction_id = 0
         self.session = requests.Session()
         self.connected_devices: Dict[str, bool] = {}
+        # Guest-mode JSON-RPC channel direct to the scope (bypasses bridge).
+        # Bridge :4700 method_sync hangs 10s on firmware 7.34 for get_view_state
+        # and get_setting; the scope's :4701 guest port answers in ~30ms.
+        self._observer_host = host
+        self._observer_port = observer_port
+        self._observer: Optional[SeestarObserverClient] = None
+
+    @property
+    def observer(self) -> SeestarObserverClient:
+        if self._observer is None:
+            self._observer = SeestarObserverClient(
+                self._observer_host, self._observer_port, timeout=3.0
+            )
+        return self._observer
 
     def _next_transaction_id(self) -> int:
         self._transaction_id += 1
@@ -355,5 +372,17 @@ class AlpacaClient:
         return self.seestar_action("get_device_state")
 
     def get_view_state(self) -> Optional[dict]:
-        """Get current view state — mode (star/moon), stage, target name."""
-        return self.seestar_action("get_view_state")
+        """Get current view state — mode (star/moon), stage, target name.
+
+        Goes to the scope's :4701 guest channel directly; the bridge's
+        method_sync path hangs 10s on firmware 7.34 for this method.
+        """
+        try:
+            result = self.observer.get_view_state()
+            # seestar_action callers expect the seestar_alp envelope shape:
+            #     {"0": {"method": ..., "result": ...}}
+            # Wrap so existing view code (imaging.py) keeps working unchanged.
+            return {"0": {"method": "get_view_state", "result": result}}
+        except SeestarObserverError as exc:
+            logger.warning(f"observer get_view_state failed, falling back to bridge: {exc}")
+            return self.seestar_action("get_view_state")

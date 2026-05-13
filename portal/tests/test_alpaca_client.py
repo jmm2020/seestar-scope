@@ -8,6 +8,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from clients.alpaca_client import AlpacaClient, AlpacaResponse
+from clients.seestar_observer import SeestarObserverError
 
 
 # --- AlpacaResponse tests ---
@@ -351,8 +352,15 @@ def test_seestar_action_returns_none_when_value_key_absent():
 
 
 def test_get_view_state_returns_none_on_string_payload():
-    """End-to-end: get_view_state() never leaks a string to UI code."""
+    """End-to-end: when observer fails and bridge returns junk, return None.
+
+    Avoid hitting the real scope on :4701 by injecting a stub observer that
+    raises — that forces the bridge fallback, which is what this test guards.
+    """
     client = AlpacaClient()
+    stub_observer = MagicMock()
+    stub_observer.get_view_state.side_effect = SeestarObserverError("forced fallback")
+    client._observer = stub_observer
     with patch.object(client.session, "put") as mock_put:
         mock_put.return_value = _mock_action_response("not-json")
         assert client.get_view_state() is None
