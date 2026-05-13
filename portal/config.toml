@@ -2,12 +2,21 @@
 title = "SeestarScope - Seestar S50 Control"
 
 [seestar]
+# Primary control path — ZWO firmware's native ASCOM Alpaca server.
+# Confirmed working on firmware 7.34 / Alpaca v1.2.0-3 (2026-01-13).
+# Park/Unpark/Slew/Tracking/Camera/Focuser/FilterWheel/Switch all native here.
 ip_address = "192.168.0.132"
 alpaca_port = 32323
-alp_host = "localhost"            # seestar_alp bridge host (for native commands)
-alp_port = 5555                   # seestar_alp bridge port
 auto_connect = true
-img_port = 7556                   # MJPEG live view stream port
+
+# OPTIONAL — seestar_alp bridge. Only needed for features ZWO has not yet
+# exposed via standard Alpaca: live view (MJPEG stream), stacking control,
+# and raw JSON-RPC (get_device_state, get_view_state, iscope_start_*).
+# Set alp_host to the host running the bridge (e.g. "192.168.0.234" for the
+# Jetson) when those features are wanted; leave defaults otherwise.
+alp_host = "localhost"
+alp_port = 5555
+img_port = 7556                   # MJPEG live view stream port (bridge)
 
 [stellarium]
 host = "localhost"

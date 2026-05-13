@@ -7,7 +7,8 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import requests
-from views.goto import _check_alp_reachable, _poll_state_transition
+from views.goto import _check_alp_reachable
+from views.slew_helpers import poll_state_transition as _poll_state_transition
 
 
 def test_alp_reachable_when_200():

@@ -159,32 +159,6 @@ class AlpacaClient:
     def unpark(self) -> AlpacaResponse:
         return self._put("telescope", 0, "unpark")
 
-    def start_up_sequence(self, lat: float = 0.0, lon: float = 0.0) -> AlpacaResponse:
-        """Run Seestar's firmware startup sequence — physically unfolds the arm.
-
-        ALPACA standard `/unpark` is a stub no-op in seestar_alp (returns success but
-        never engages the motor). The firmware-correct way to open the arm is the
-        named action `action_start_up_sequence` on the device's action endpoint.
-        """
-        url = f"{self.alp_base_url}/telescope/0/action"
-        form_data = {
-            "Action": "action_start_up_sequence",
-            "Parameters": json.dumps({"lat": lat, "lon": lon}),
-            "ClientID": str(self.client_id),
-            "ClientTransactionID": str(self._next_transaction_id()),
-        }
-        try:
-            resp = self.session.put(url, data=form_data, timeout=self.timeout)
-            data = resp.json()
-            return AlpacaResponse(
-                value=data.get("Value"),
-                error_number=data.get("ErrorNumber", 0),
-                error_message=data.get("ErrorMessage", ""),
-                server_transaction_id=data.get("ServerTransactionID", 0),
-            )
-        except requests.exceptions.RequestException as e:
-            return AlpacaResponse(error_number=-1, error_message=str(e))
-
     def find_home(self) -> AlpacaResponse:
         return self._put("telescope", 0, "findhome")
 

@@ -10,6 +10,12 @@ import os
 from utils.coordinates import format_ra, format_dec, parse_ra, parse_dec
 from catalog.messier import lookup_messier, search_catalog
 from config_loader import load_config
+from views.slew_helpers import (
+    DEFAULT_TRANSITION_TIMEOUT_S,
+    ensure_unparked,
+    format_slew_error,
+    poll_state_transition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,26 +76,6 @@ def _check_alp_reachable() -> bool:
         return False
 
 
-def _poll_state_transition(alpaca, predicate, timeout_s: int = VERIFY_TIMEOUT_S) -> bool:
-    """Poll telescope state until predicate returns True or timeout_s elapses.
-
-    Returns True if the transition was observed, False on timeout.
-    Polls every 1 second; each GET to the ALPACA bridge is fast (~50ms).
-    Exceptions from get_telescope_status() are caught and retried — a False
-    return therefore means either no transition or the bridge was unreachable.
-    """
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        try:
-            status = alpaca.get_telescope_status()
-            if predicate(status):
-                return True
-        except Exception as exc:
-            logger.debug("_poll_state_transition: status read failed: %s", exc)
-        time.sleep(1)
-    return False
-
-
 # Popular quick-access targets
 QUICK_TARGETS = [
     ("M42", "Orion Nebula"),
@@ -108,13 +94,18 @@ QUICK_TARGETS = [
 
 
 def _slew_and_report(alpaca, ra_hours: float, dec_degrees: float, target_name: str):
-    """Issue slew command and display result."""
+    """Issue slew command and display result. Auto-unparks if needed."""
+    ok, reason = ensure_unparked(alpaca)
+    if not ok:
+        st.error(f"Slew to {target_name} aborted — {reason}")
+        return
+
     resp = alpaca.slew_to(ra_hours, dec_degrees)
     if resp.success:
         st.session_state["slewing_target"] = target_name
         st.rerun()
     else:
-        st.error(f"Slew failed: {resp.error_message}")
+        st.error(f"Slew to {target_name} failed: {format_slew_error(resp)}")
 
 
 def _render_slewing_progress(alpaca):
@@ -368,28 +359,27 @@ def _render_mount_controls(alpaca):
             "Unpark (Open)",
             type="primary",
             use_container_width=True,
-            help="Run Seestar's firmware startup sequence to physically unfold "
-            "the arm. ALPACA's standard /unpark endpoint is a no-op stub in "
-            "seestar_alp — this calls action_start_up_sequence instead, which "
-            "engages the arm motor.",
+            help="Clear the parked state so the mount can slew. The arm "
+            "physically deploys as part of the next slew — no separate "
+            "open command is needed on firmware 7.34+.",
         ):
-            resp = alpaca.start_up_sequence()
+            resp = alpaca.unpark()
             if resp.success:
                 with st.spinner(f"Waiting for scope to unpark (up to {VERIFY_TIMEOUT_S}s)..."):
-                    transitioned = _poll_state_transition(
+                    transitioned = poll_state_transition(
                         alpaca,
                         lambda s: s.get("at_park", True) is False,
                     )
                 if transitioned:
-                    st.success("Scope unparked — arm is unfolded and ready.")
+                    st.success("Scope unparked — ready to slew.")
                     st.rerun()
                 else:
                     st.warning(
-                        "Start-up sequence command accepted but at_park hasn't cleared. "
-                        "The arm may still be unfolding — give it 10–15s and refresh."
+                        "Unpark accepted but at_park hasn't cleared yet. "
+                        "Give it a few seconds and refresh."
                     )
             else:
-                st.error(f"Start-up sequence failed: {resp.error_message}")
+                st.error(f"Unpark failed: {resp.error_message}")
     with col_park:
         if st.button(
             "Park (Close)",
@@ -400,7 +390,7 @@ def _render_mount_controls(alpaca):
             resp = alpaca.park()
             if resp.success:
                 with st.spinner(f"Waiting for scope to park (up to {VERIFY_TIMEOUT_S}s)..."):
-                    transitioned = _poll_state_transition(
+                    transitioned = poll_state_transition(
                         alpaca,
                         lambda s: s.get("at_park", False) is True,
                     )
@@ -424,7 +414,7 @@ def _render_mount_controls(alpaca):
             resp = alpaca.find_home()
             if resp.success:
                 with st.spinner(f"Waiting for scope to reach home (up to {VERIFY_TIMEOUT_S}s)..."):
-                    transitioned = _poll_state_transition(
+                    transitioned = poll_state_transition(
                         alpaca,
                         lambda s: s.get("at_home", False) is True,
                     )
