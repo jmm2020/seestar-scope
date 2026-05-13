@@ -1131,9 +1131,10 @@ def render_imaging(alpaca, config):
 
     alp_available = alpaca.is_alp_available()
     if not alp_available:
-        st.error(
-            f"⚠️ **seestar_alp is not reachable** at `{alpaca.alp_base_url}` — "
-            "live view and stacking are non-functional until the service is running."
+        st.warning(
+            f"⚠️ **seestar_alp bridge is not responding** at `{alpaca.alp_base_url}` — "
+            "the MJPEG Live View below may show placeholder frames. Direct stacked-frame "
+            "polling on scope :4800 is unaffected."
         )
 
     if "active_session_id" not in st.session_state:

@@ -301,13 +301,22 @@ class AlpacaClient:
             logger.error(f"seestar_action({method}) failed: {e}")
             return None
 
-    def is_alp_available(self, timeout: int = 2) -> bool:
-        """Return True if the seestar_alp bridge is reachable (any HTTP response, including 4xx/5xx)."""
+    def is_alp_available(self, timeout: int = 4) -> bool:
+        """Return True if the seestar_alp bridge's Alpaca API is actually responding.
+
+        Probes a real endpoint (`telescope/0/connected`) rather than the bare
+        `/api/v1` path (which returns 404 with no useful information). A
+        successful HTTP 200 with the standard Alpaca response shape means the
+        bridge process is up and serving requests — which is what callers
+        actually care about.
+        """
+        probe_url = f"{self.alp_base_url}/telescope/0/connected"
+        params = {"ClientID": 1, "ClientTransactionID": 1}
         try:
-            self.session.get(self.alp_base_url, timeout=timeout)
-            return True
+            r = self.session.get(probe_url, params=params, timeout=timeout)
+            return r.status_code == 200 and "ErrorNumber" in r.text
         except requests.exceptions.RequestException as e:
-            logger.debug(f"is_alp_available probe failed ({self.alp_base_url}): {e}")
+            logger.debug(f"is_alp_available probe failed ({probe_url}): {e}")
             return False
 
     # --- Live View & Stacking ---

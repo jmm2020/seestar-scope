@@ -187,22 +187,37 @@ def test_set_dew_heater():
         assert result.success is True
 
 
-def test_is_alp_available_true():
+def test_is_alp_available_true_when_alpaca_endpoint_returns_200_with_error_shape():
+    """Probe hits the real telescope/connected endpoint; 200 with Alpaca body = healthy."""
     client = AlpacaClient()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
+    mock_resp.text = '{"Value": true, "ErrorNumber": 0, "ErrorMessage": ""}'
     with patch.object(client.session, "get", return_value=mock_resp) as mock_get:
         assert client.is_alp_available() is True
-    mock_get.assert_called_once_with(client.alp_base_url, timeout=2)
+    # Probe must target the telescope/connected endpoint, not the bare /api/v1 root
+    call_args = mock_get.call_args
+    assert call_args.args[0].endswith("/telescope/0/connected")
 
 
-def test_is_alp_available_true_on_http_error_response():
-    """Service counts as reachable when HTTP layer responds, even with error status."""
+def test_is_alp_available_false_on_404_or_other_non_200():
+    """A 404 (e.g. probing the wrong path) is not a healthy bridge — return False."""
     client = AlpacaClient()
     mock_resp = MagicMock()
-    mock_resp.status_code = 503
+    mock_resp.status_code = 404
+    mock_resp.text = "Not Found"
     with patch.object(client.session, "get", return_value=mock_resp):
-        assert client.is_alp_available() is True
+        assert client.is_alp_available() is False
+
+
+def test_is_alp_available_false_on_200_without_alpaca_shape():
+    """A 200 from a different service (no ErrorNumber field) is not a real Alpaca response."""
+    client = AlpacaClient()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "<html>some unrelated page</html>"
+    with patch.object(client.session, "get", return_value=mock_resp):
+        assert client.is_alp_available() is False
 
 
 def test_is_alp_available_logs_on_failure():
