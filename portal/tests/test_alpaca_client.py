@@ -188,16 +188,16 @@ def test_set_dew_heater():
 
 
 def test_is_alp_available_true_when_alpaca_endpoint_returns_200_with_error_shape():
-    """Probe hits the real telescope/connected endpoint; 200 with Alpaca body = healthy."""
+    """Probe hits /management/apiversions (cheap, no scope touch); 200 with Alpaca body = healthy."""
     client = AlpacaClient()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.text = '{"Value": true, "ErrorNumber": 0, "ErrorMessage": ""}'
+    mock_resp.text = '{"Value": [1], "ErrorNumber": 0, "ErrorMessage": ""}'
     with patch.object(client.session, "get", return_value=mock_resp) as mock_get:
         assert client.is_alp_available() is True
-    # Probe must target the telescope/connected endpoint, not the bare /api/v1 root
+    # Probe must target /management/apiversions — avoids method_sync hangs on /telescope/* paths
     call_args = mock_get.call_args
-    assert call_args.args[0].endswith("/telescope/0/connected")
+    assert call_args.args[0].endswith("/management/apiversions")
 
 
 def test_is_alp_available_false_on_404_or_other_non_200():
