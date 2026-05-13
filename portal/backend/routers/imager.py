@@ -11,8 +11,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Response
-from fastapi.responses import Response as FastAPIResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
 from clients.seestar_imager import SeestarImagerClient, SeestarImagerError
 
@@ -71,4 +71,4 @@ def get_stacked_frame(quality: int = 90):
         "X-Frame-Height": str(frame.height),
         "X-Frame-Format": frame.frame_format,
     }
-    return FastAPIResponse(content=jpeg, media_type="image/jpeg", headers=headers)
+    return Response(content=jpeg, media_type="image/jpeg", headers=headers)

@@ -330,9 +330,8 @@ class SirilService:
                 "session_id": session_id,
                 "output_files": [str(f) for f in stacked_files],
             }
-        else:
-            return {
-                "status": "processing",
-                "session_id": session_id,
-                "working_dir": str(session_dir),
-            }
+        return {
+            "status": "processing",
+            "session_id": session_id,
+            "working_dir": str(session_dir),
+        }
