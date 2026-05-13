@@ -301,7 +301,7 @@ class AlpacaClient:
             logger.error(f"seestar_action({method}) failed: {e}")
             return None
 
-    def is_alp_available(self, timeout: int = 3) -> bool:
+    def is_alp_available(self, timeout: int = 6) -> bool:
         """Return True if the seestar_alp bridge's Alpaca API is actually responding.
 
         Probes `/management/apiversions` — a cheap Alpaca management endpoint
@@ -310,21 +310,29 @@ class AlpacaClient:
         Alpaca response shape (`ErrorNumber` field) means the bridge process
         is up and serving Alpaca traffic.
 
-        Probing the bare `/api/v1` path used to count any HTTP response as
-        success, but seestar_alp returns 404 there since it has no root
-        handler — so the old probe always passed even when the bridge was
-        thoroughly broken.
+        Retries once on Timeout or ConnectionError because seestar_alp's
+        first request after an idle period or its own restart can take 2-3s
+        (observed live), and a stale keep-alive socket in our requests.Session
+        can fail with ConnectionError before urllib3 transparently re-dials.
         """
         # alp_base_url already includes /api/v1; strip it for the /management probe.
         root = self.alp_base_url.rsplit("/api/v1", 1)[0]
         probe_url = f"{root}/management/apiversions"
         params = {"ClientID": 1, "ClientTransactionID": 1}
-        try:
-            r = self.session.get(probe_url, params=params, timeout=timeout)
-            return r.status_code == 200 and "ErrorNumber" in r.text
-        except requests.exceptions.RequestException as e:
-            logger.debug(f"is_alp_available probe failed ({probe_url}): {e}")
-            return False
+        for attempt in (1, 2):
+            try:
+                r = self.session.get(probe_url, params=params, timeout=timeout)
+                return r.status_code == 200 and "ErrorNumber" in r.text
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt == 1:
+                    logger.debug(f"is_alp_available probe retry after {type(e).__name__}: {e}")
+                    continue
+                logger.debug(f"is_alp_available probe failed ({probe_url}) after retry: {e}")
+                return False
+            except requests.exceptions.RequestException as e:
+                logger.debug(f"is_alp_available probe failed ({probe_url}): {e}")
+                return False
+        return False
 
     # --- Live View & Stacking ---
 

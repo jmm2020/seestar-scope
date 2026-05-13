@@ -318,9 +318,10 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
         if st.button(
             "Start Stack",
             type="primary",
-            disabled=is_stacking or not alp_available,
+            disabled=is_stacking,
             use_container_width=True,
             key="btn_start_stack",
+            help="Begin a new stacking session at the current gain/exposure",
         ):
             with st.spinner("Starting stack..."):
                 alpaca.start_stack(restart=False, gain=gain)
@@ -343,9 +344,10 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
     with col_stop:
         if st.button(
             "Stop Stack",
-            disabled=not is_stacking or not alp_available,
+            disabled=not is_stacking,
             use_container_width=True,
             key="btn_stop_stack",
+            help="Stop the active stacking session",
         ):
             with st.spinner("Stopping..."):
                 alpaca.stop_stack()
@@ -366,9 +368,9 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
     with col_restart:
         if st.button(
             "Restart Stack",
-            disabled=not alp_available,
             use_container_width=True,
             key="btn_restart_stack",
+            help="Stop the current stack (if any) and start a fresh one",
         ):
             with st.spinner("Restarting stack..."):
                 alpaca.stop_stack()

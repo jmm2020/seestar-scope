@@ -221,7 +221,7 @@ def test_is_alp_available_false_on_200_without_alpaca_shape():
 
 
 def test_is_alp_available_logs_on_failure():
-    """Probe failure is logged at DEBUG level with URL context."""
+    """Probe failure is logged at DEBUG level with URL context (retry + final = 2 logs)."""
     client = AlpacaClient()
     with (
         patch.object(
@@ -231,18 +231,37 @@ def test_is_alp_available_logs_on_failure():
     ):
         result = client.is_alp_available()
     assert result is False
-    mock_logger.debug.assert_called_once()
-    assert "is_alp_available" in mock_logger.debug.call_args.args[0]
+    # One log for the retry attempt, one for the final failure
+    assert mock_logger.debug.call_count == 2
+    assert all("is_alp_available" in call.args[0] for call in mock_logger.debug.call_args_list)
 
 
 def test_is_alp_available_timeout():
+    """Times out twice (initial + retry) — should return False after retry exhaustion."""
     client = AlpacaClient()
     with patch.object(
         client.session,
         "get",
         side_effect=requests.exceptions.Timeout("timed out"),
-    ):
+    ) as mock_get:
         assert client.is_alp_available() is False
+    assert mock_get.call_count == 2, "probe must retry once on timeout before giving up"
+
+
+def test_is_alp_available_recovers_on_retry_after_timeout():
+    """First call times out, second succeeds — probe must return True (matches live behavior
+    where seestar_alp first request after idle takes 2-3s and the second is fast)."""
+    client = AlpacaClient()
+    good_resp = MagicMock()
+    good_resp.status_code = 200
+    good_resp.text = '{"Value": [1], "ErrorNumber": 0, "ErrorMessage": ""}'
+    with patch.object(
+        client.session,
+        "get",
+        side_effect=[requests.exceptions.Timeout("slow first hit"), good_resp],
+    ) as mock_get:
+        assert client.is_alp_available() is True
+    assert mock_get.call_count == 2
 
 
 # --- seestar_action() error-shape tests (regression for issue #29) ---
