@@ -9,6 +9,7 @@ import streamlit as st
 
 from clients.sessions_client import SessionsClient
 from utils.image_processing import alpaca_imagearray_to_image, save_image
+from views.imaging_stacked import render_stacked_image_panel
 
 logger = logging.getLogger(__name__)
 
@@ -1148,6 +1149,7 @@ def render_imaging(alpaca, config):
 
     if is_stacking:
         _render_live_stack_panel()
+        render_stacked_image_panel(BACKEND_PORT)
 
     st.divider()
 

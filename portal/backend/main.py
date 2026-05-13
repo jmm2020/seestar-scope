@@ -21,6 +21,7 @@ from backend.routers import (
     sessions,
     conditions,
     stacking,
+    imager,
 )
 from backend.config import settings
 from backend.database import (
@@ -102,6 +103,7 @@ app.include_router(postprocessing.router)  # prefix="/api/postprocessing" define
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(conditions.router)  # prefix="/api/conditions" defined in router
 app.include_router(stacking.router)    # prefix="/api/stacking" defined in router
+app.include_router(imager.router)      # prefix="/api/imager" defined in router
 app.include_router(status_ws.router)  # WebSocket: live telescope status stream
 
 
