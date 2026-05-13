@@ -108,8 +108,8 @@ def test_no_banner_when_alp_up(monkeypatch):
     assert len(error_calls) == 0
 
 
-def test_stacking_controls_receive_alp_available_flag(monkeypatch):
-    """render_imaging() must pass alp_available into _render_stacking_controls()."""
+def test_stacking_controls_called_with_three_args(monkeypatch):
+    """render_imaging() must call _render_stacking_controls(alpaca, view, is_stacking) — no alp_available."""
     import streamlit as st
 
     client = AlpacaClient()
@@ -123,6 +123,7 @@ def test_stacking_controls_receive_alp_available_flag(monkeypatch):
 
     with (
         patch.object(st, "header"),
+        patch.object(st, "warning"),
         patch.object(st, "error"),
         patch.object(st, "divider"),
         patch("views.imaging._render_live_view"),
@@ -140,7 +141,7 @@ def test_stacking_controls_receive_alp_available_flag(monkeypatch):
 
         render_imaging(client, MagicMock())
 
-    assert captured_args["args"][3] is False  # alp_available is the 4th positional arg
+    assert len(captured_args["args"]) == 3  # alpaca, view, is_stacking — no 4th arg
 
 
 def test_live_stack_panel_shown_when_stacking(monkeypatch):
