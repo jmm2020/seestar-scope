@@ -46,7 +46,7 @@ def render_gallery():
         ["All", "Local captures", "Scope onboard"],
         key="gallery_source",
         help="Local captures live in the portal's SQLite DB; Scope onboard reads "
-             "the Seestar's built-in archive over :4701.",
+        "the Seestar's built-in archive over :4701.",
     )
 
     # Fetch items once; pass count into stats to avoid a second :4701 round-trip.
@@ -217,17 +217,14 @@ def render_image_grid(
 ):
     """Render local + onboard items in a responsive grid."""
     onboard_items = onboard_items or []
-    all_items = [("local", img) for img in images] + [
-        ("onboard", item) for item in onboard_items
-    ]
+    all_items = [("local", img) for img in images] + [("onboard", item) for item in onboard_items]
     st.markdown(
-        f"### Showing {len(all_items)} items "
-        f"({len(images)} local, {len(onboard_items)} onboard)"
+        f"### Showing {len(all_items)} items ({len(images)} local, {len(onboard_items)} onboard)"
     )
 
     for idx in range(0, len(all_items), 3):
         cols = st.columns(3)
-        for col, (kind, item) in zip(cols, all_items[idx:idx + 3]):
+        for col, (kind, item) in zip(cols, all_items[idx : idx + 3]):
             with col:
                 if kind == "local":
                     render_image_card(item, pp_healthy=pp_healthy)

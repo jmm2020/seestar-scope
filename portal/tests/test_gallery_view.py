@@ -96,7 +96,12 @@ def test_fetch_onboard_items_returns_list_on_200(monkeypatch):
     fake_response = MagicMock()
     fake_response.status_code = 200
     fake_response.json.return_value = [
-        {"name": "img", "thumb_url": "http://s/t_thn.jpg", "full_url": "http://s/t.jpg", "is_video": False}
+        {
+            "name": "img",
+            "thumb_url": "http://s/t_thn.jpg",
+            "full_url": "http://s/t.jpg",
+            "is_video": False,
+        }
     ]
 
     with patch("views.gallery.requests.get", return_value=fake_response):
