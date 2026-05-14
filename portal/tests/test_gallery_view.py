@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import requests
+
 # Stub heavy/unavailable packages before project imports.
 for _mod in (
     "streamlit",
@@ -47,6 +49,9 @@ def test_render_onboard_card_encodes_spaces_in_thumb_url(monkeypatch):
     assert " " not in called_url, "Spaces must be percent-encoded in the proxy URL"
     assert "%20" in called_url, "Space must be encoded as %20"
     assert "path=" in called_url, "Proxy URL must use path= param, not url="
+    assert mock_get.call_args[1].get("timeout") == 10, (
+        "requests.get must use timeout=10 to prevent UI hangs"
+    )
 
     assert st_mock.image.called, "st.image must be called for a non-video item"
     image_arg = st_mock.image.call_args[0][0]
@@ -54,15 +59,36 @@ def test_render_onboard_card_encodes_spaces_in_thumb_url(monkeypatch):
 
 
 def test_render_onboard_card_thumbnail_http_error(monkeypatch):
-    """HTTP error from backend causes st.error to be shown, not an unhandled exception."""
+    """HTTP 4xx/5xx from backend (raise_for_status) triggers st.error, not an unhandled exception."""
+    st_mock = MagicMock()
+    monkeypatch.setattr("views.gallery.st", st_mock)
+
+    fake_resp = MagicMock()
+    fake_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
+
+    item = {
+        "name": "M 82",
+        "is_video": False,
+        "thumb_url": "http://10.0.0.1/MyWorks/M 82/img_thn.jpg",
+        "full_url": "http://10.0.0.1/MyWorks/M 82/img.jpg",
+    }
+    with patch("views.gallery.requests.get", return_value=fake_resp):
+        render_onboard_card(item)
+
+    assert st_mock.error.called, "st.error must be called when raise_for_status raises HTTPError"
+    assert not st_mock.image.called, "st.image must not be called on fetch failure"
+
+
+def test_render_onboard_card_thumbnail_network_error(monkeypatch):
+    """Network failure during thumbnail fetch triggers st.error, not an unhandled exception."""
     st_mock = MagicMock()
     monkeypatch.setattr("views.gallery.st", st_mock)
 
     item = {
         "name": "M 82",
         "is_video": False,
-        "thumb_url": "http://10.0.0.1/MyWorks/M%2082/img_thn.jpg",
-        "full_url": "http://10.0.0.1/MyWorks/M%2082/img.jpg",
+        "thumb_url": "http://10.0.0.1/MyWorks/M 82/img_thn.jpg",
+        "full_url": "http://10.0.0.1/MyWorks/M 82/img.jpg",
     }
     with patch("views.gallery.requests.get", side_effect=Exception("connection refused")):
         render_onboard_card(item)
