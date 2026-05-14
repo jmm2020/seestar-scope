@@ -247,7 +247,9 @@ def render_onboard_card(item: Dict[str, Any]):
             encoded = urllib.parse.quote(path_part, safe="/")
             thumb_proxy = f"{BACKEND_URL}/api/gallery/onboard/thumbnail?path={encoded}"
             try:
-                st.image(thumb_proxy, use_container_width=True)
+                resp = requests.get(thumb_proxy, timeout=10)
+                resp.raise_for_status()
+                st.image(resp.content, use_container_width=True)
             except Exception as exc:
                 logger.warning("render_onboard_card: thumbnail load failed: %s", exc, exc_info=True)
                 st.error("Failed to load thumbnail")

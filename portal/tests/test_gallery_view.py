@@ -27,9 +27,12 @@ from views.gallery import fetch_onboard_items, render_onboard_card  # noqa: E402
 
 
 def test_render_onboard_card_encodes_spaces_in_thumb_url(monkeypatch):
-    """urllib.parse.quote with safe='/' must encode spaces so 'M 13' paths work."""
+    """requests.get must be called with a percent-encoded proxy URL; st.image receives bytes."""
     st_mock = MagicMock()
     monkeypatch.setattr("views.gallery.st", st_mock)
+
+    fake_resp = MagicMock()
+    fake_resp.content = b"fake-jpeg-bytes"
 
     item = {
         "name": "M 13",
@@ -37,13 +40,35 @@ def test_render_onboard_card_encodes_spaces_in_thumb_url(monkeypatch):
         "thumb_url": "http://10.0.0.1/MyWorks/M 13/img_thn.jpg",
         "full_url": "http://10.0.0.1/MyWorks/M 13/img.jpg",
     }
-    render_onboard_card(item)
+    with patch("views.gallery.requests.get", return_value=fake_resp) as mock_get:
+        render_onboard_card(item)
+
+    called_url = mock_get.call_args[0][0]
+    assert " " not in called_url, "Spaces must be percent-encoded in the proxy URL"
+    assert "%20" in called_url, "Space must be encoded as %20"
+    assert "path=" in called_url, "Proxy URL must use path= param, not url="
 
     assert st_mock.image.called, "st.image must be called for a non-video item"
-    image_url = st_mock.image.call_args[0][0]
-    assert " " not in image_url, "Spaces must be percent-encoded in the proxy URL"
-    assert "%20" in image_url, "Space must be encoded as %20"
-    assert "path=" in image_url, "Proxy URL must use path= param, not url="
+    image_arg = st_mock.image.call_args[0][0]
+    assert image_arg == b"fake-jpeg-bytes", "st.image must receive bytes, not a URL string"
+
+
+def test_render_onboard_card_thumbnail_http_error(monkeypatch):
+    """HTTP error from backend causes st.error to be shown, not an unhandled exception."""
+    st_mock = MagicMock()
+    monkeypatch.setattr("views.gallery.st", st_mock)
+
+    item = {
+        "name": "M 82",
+        "is_video": False,
+        "thumb_url": "http://10.0.0.1/MyWorks/M%2082/img_thn.jpg",
+        "full_url": "http://10.0.0.1/MyWorks/M%2082/img.jpg",
+    }
+    with patch("views.gallery.requests.get", side_effect=Exception("connection refused")):
+        render_onboard_card(item)
+
+    assert st_mock.error.called, "st.error must be called when thumbnail fetch fails"
+    assert not st_mock.image.called, "st.image must not be called on fetch failure"
 
 
 def test_render_onboard_card_video_no_try_except(monkeypatch):
