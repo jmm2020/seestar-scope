@@ -5,10 +5,11 @@ Shows thumbnails, metadata, filtering controls, and processing status.
 """
 
 import os
+import urllib.parse
 import streamlit as st
 import requests
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,24 +35,32 @@ def render_gallery():
     if not pp_healthy:
         st.warning("⚠️ Post-processing service is unreachable — Process buttons disabled.")
 
-    # Display gallery stats
-    render_gallery_stats()
-
     st.divider()
 
     # Filter controls
     with st.expander("🔍 Filter Options", expanded=False):
         filters = render_filter_controls()
 
-    # Fetch and display images
-    images = fetch_images(filters)
+    source = st.selectbox(
+        "Source",
+        ["All", "Local captures", "Scope onboard"],
+        key="gallery_source",
+        help="Local captures live in the portal's SQLite DB; Scope onboard reads "
+             "the Seestar's built-in archive over :4701.",
+    )
 
-    if not images:
-        st.info("No images found. Capture some images first using the Imaging or Sequence pages.")
+    # Fetch items once; pass count into stats to avoid a second :4701 round-trip.
+    local_images = fetch_images(filters) if source in ("All", "Local captures") else []
+    onboard_items = fetch_onboard_items() if source in ("All", "Scope onboard") else []
+
+    # Display gallery stats
+    render_gallery_stats(onboard_count=len(onboard_items))
+
+    if not local_images and not onboard_items:
+        st.info("No images found. Capture some images first, or check the scope connection.")
         return
 
-    # Display image grid
-    render_image_grid(images, pp_healthy=pp_healthy)
+    render_image_grid(local_images, onboard_items=onboard_items, pp_healthy=pp_healthy)
 
 
 def check_backend_health() -> bool:
@@ -78,14 +87,14 @@ def check_postprocessing_health() -> bool:
         return False
 
 
-def render_gallery_stats():
+def render_gallery_stats(onboard_count: int = 0):
     """Display gallery statistics summary."""
     try:
         response = requests.get(f"{BACKEND_URL}/api/gallery/stats", timeout=5)
         if response.status_code == 200:
             stats = response.json()
 
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
 
             with col1:
                 st.metric("Total Images", stats["total_images"])
@@ -99,6 +108,9 @@ def render_gallery_stats():
             with col4:
                 hours = stats["total_exposure_hours"]
                 st.metric("Total Exposure", f"{hours:.1f}h")
+
+            with col5:
+                st.metric("Scope Onboard", onboard_count)
 
             # Target breakdown
             if stats.get("targets"):
@@ -185,15 +197,62 @@ def fetch_images(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
 
-def render_image_grid(images: List[Dict[str, Any]], pp_healthy: bool = False):
-    """Render images in a responsive grid."""
-    st.markdown(f"### Showing {len(images)} images")
+def fetch_onboard_items() -> List[Dict[str, Any]]:
+    """Fetch the scope's onboard archive listing from the backend."""
+    try:
+        response = requests.get(f"{BACKEND_URL}/api/gallery/onboard/", timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        logger.warning("Onboard fetch HTTP %s: %s", response.status_code, response.text[:200])
+        return []
+    except Exception as exc:
+        logger.error("Error fetching onboard items: %s", exc, exc_info=True)
+        return []
 
-    for idx in range(0, len(images), 3):
+
+def render_image_grid(
+    images: List[Dict[str, Any]],
+    onboard_items: Optional[List[Dict[str, Any]]] = None,
+    pp_healthy: bool = False,
+):
+    """Render local + onboard items in a responsive grid."""
+    onboard_items = onboard_items or []
+    all_items = [("local", img) for img in images] + [
+        ("onboard", item) for item in onboard_items
+    ]
+    st.markdown(
+        f"### Showing {len(all_items)} items "
+        f"({len(images)} local, {len(onboard_items)} onboard)"
+    )
+
+    for idx in range(0, len(all_items), 3):
         cols = st.columns(3)
-        for col, image in zip(cols, images[idx:idx+3]):
+        for col, (kind, item) in zip(cols, all_items[idx:idx + 3]):
             with col:
-                render_image_card(image, pp_healthy=pp_healthy)
+                if kind == "local":
+                    render_image_card(item, pp_healthy=pp_healthy)
+                else:
+                    render_onboard_card(item)
+
+
+def render_onboard_card(item: Dict[str, Any]):
+    """Render a single onboard (scope-resident) item card."""
+    with st.container():
+        is_video = item.get("is_video", False)
+        if is_video:
+            st.caption("🎬 Video (requires direct LAN access to scope)")
+            st.video(item["full_url"])  # browser fetches directly from scope :80
+        else:
+            path_part = urllib.parse.urlparse(item["thumb_url"]).path.lstrip("/")
+            encoded = urllib.parse.quote(path_part, safe="/")
+            thumb_proxy = f"{BACKEND_URL}/api/gallery/onboard/thumbnail?path={encoded}"
+            try:
+                st.image(thumb_proxy, use_container_width=True)
+            except Exception as exc:
+                logger.warning("render_onboard_card: thumbnail load failed: %s", exc, exc_info=True)
+                st.error("Failed to load thumbnail")
+        st.markdown(f"**{item.get('name', '(unnamed)')}**")
+        st.caption("📷 Scope onboard")
 
 
 def render_image_card(image: Dict[str, Any], pp_healthy: bool = False):

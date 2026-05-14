@@ -10,7 +10,7 @@ Canonical project topology and operational facts for any coding agent (Claude Co
 |---|---|---|---|
 | Workstation | 192.168.0.36 | Dev box (this machine). Source lives here. **Nothing runs here.** | — |
 | **Jetson** | **192.168.0.234** | Runs the portal stack via docker compose. Hostname `john-ubuntu-24-04`. SSH: `ssh jmm2020@192.168.0.234` (key-based, no config alias yet) | 22 (ssh), 5555 (seestar_alp action), 7556 (MJPEG), 8502 (portal-ui), 8503 (portal-backend) |
-| **Scope (S50)** | **192.168.0.132** | Seestar S50, firmware 7.34. Runs its own ALPACA server. | 32323 (ALPACA — works), 4700 (JSON-RPC — PEM-gated on 7.34), 4720 (UDP intro — silent), 4800/4801 (imaging streams) |
+| **Scope (S50)** | **192.168.0.132** | Seestar S50, firmware 7.34. Runs its own ALPACA server. | 32323 (ALPACA — works), 4700 (JSON-RPC — PEM-gated on 7.34), 4701 (JSON-RPC guest channel — works; no PEM for whitelisted methods), 4720 (UDP intro — silent), 4800/4801 (imaging streams), 80 (HTTP static file server — serves MyWorks/ album content) |
 
 ## Request Flow
 
@@ -23,6 +23,21 @@ Independent path (works without auth):
 ```
 browser → ALPACA (.132:32323) ← scope firmware native
 ```
+
+## Guest JSON-RPC Channel (:4701)
+
+Firmware 7.34 exposes a second TCP JSON-RPC listener on :4701 that does **not** require the signed `verify` token. Some methods are whitelisted for guest access:
+
+| Method | Returns | Verified |
+|--------|---------|---------|
+| `get_albums` | `{path: "MyWorks", list: [{group_name, files: [{name, thn, count, type}]}]}` | firmware 7.34, 2026-05-14 |
+
+The scope's HTTP server on :80 serves the album content directly:
+- `http://{scope_ip}/MyWorks/{thn}` — thumbnail JPEG
+- `http://{scope_ip}/MyWorks/{thn_stripped}.jpg` — full-res JPEG
+- `http://{scope_ip}/MyWorks/{thn_stripped}.mp4` — timelapse MP4 (when `name.endswith("_video")`)
+
+The portal backend proxies thumbnails through `/api/gallery/onboard/thumbnail?path=...` for browser caching; full-res images/videos are served directly from the scope to the browser.
 
 ## Jetson container names
 
@@ -65,6 +80,7 @@ What's been applied (config edits live on Jetson):
 | Session-status / stacking panel | needs `get_view_state` via method_sync | **degraded** — shows warning |
 | Goto / Unpark | needs `start_up_sequence` via :4700 | **broken** — requires PEM |
 | Mosaics, scheduling, stacking control | needs :4700 | **broken** — requires PEM |
+| Onboard archive browsing (gallery) | guest JSON-RPC :4701 → `get_albums` + HTTP :80 | **works** — no PEM needed |
 
 ## Operational Notes
 
