@@ -9,7 +9,7 @@ import urllib.parse
 import streamlit as st
 import requests
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def render_gallery():
         ["All", "Local captures", "Scope onboard"],
         key="gallery_source",
         help="Local captures live in the portal's SQLite DB; Scope onboard reads "
-             "the Seestar's built-in archive over :4701.",
+        "the Seestar's built-in archive over :4701.",
     )
 
     # Fetch items once; pass count into stats to avoid a second :4701 round-trip.
@@ -125,7 +125,7 @@ def render_gallery_stats(onboard_count: int = 0):
         st.warning("Could not load gallery statistics")
 
 
-def render_filter_controls() -> Dict[str, Any]:
+def render_filter_controls() -> dict[str, Any]:
     """Render filter controls and return filter parameters."""
     filters = {}
 
@@ -178,7 +178,7 @@ def render_filter_controls() -> Dict[str, Any]:
     return filters
 
 
-def fetch_images(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+def fetch_images(filters: dict[str, Any]) -> list[dict[str, Any]]:
     """Fetch images from backend with filters."""
     try:
         response = requests.get(f"{BACKEND_URL}/api/gallery/", params=filters, timeout=10)
@@ -197,7 +197,7 @@ def fetch_images(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
 
-def fetch_onboard_items() -> List[Dict[str, Any]]:
+def fetch_onboard_items() -> list[dict[str, Any]]:
     """Fetch the scope's onboard archive listing from the backend."""
     try:
         response = requests.get(f"{BACKEND_URL}/api/gallery/onboard/", timeout=10)
@@ -211,23 +211,20 @@ def fetch_onboard_items() -> List[Dict[str, Any]]:
 
 
 def render_image_grid(
-    images: List[Dict[str, Any]],
-    onboard_items: Optional[List[Dict[str, Any]]] = None,
+    images: list[dict[str, Any]],
+    onboard_items: list[dict[str, Any]] | None = None,
     pp_healthy: bool = False,
 ):
     """Render local + onboard items in a responsive grid."""
     onboard_items = onboard_items or []
-    all_items = [("local", img) for img in images] + [
-        ("onboard", item) for item in onboard_items
-    ]
+    all_items = [("local", img) for img in images] + [("onboard", item) for item in onboard_items]
     st.markdown(
-        f"### Showing {len(all_items)} items "
-        f"({len(images)} local, {len(onboard_items)} onboard)"
+        f"### Showing {len(all_items)} items ({len(images)} local, {len(onboard_items)} onboard)"
     )
 
     for idx in range(0, len(all_items), 3):
         cols = st.columns(3)
-        for col, (kind, item) in zip(cols, all_items[idx:idx + 3]):
+        for col, (kind, item) in zip(cols, all_items[idx : idx + 3]):
             with col:
                 if kind == "local":
                     render_image_card(item, pp_healthy=pp_healthy)
@@ -235,7 +232,7 @@ def render_image_grid(
                     render_onboard_card(item)
 
 
-def render_onboard_card(item: Dict[str, Any]):
+def render_onboard_card(item: dict[str, Any]):
     """Render a single onboard (scope-resident) item card."""
     with st.container():
         is_video = item.get("is_video", False)
@@ -247,7 +244,9 @@ def render_onboard_card(item: Dict[str, Any]):
             encoded = urllib.parse.quote(path_part, safe="/")
             thumb_proxy = f"{BACKEND_URL}/api/gallery/onboard/thumbnail?path={encoded}"
             try:
-                st.image(thumb_proxy, use_container_width=True)
+                resp = requests.get(thumb_proxy, timeout=10)
+                resp.raise_for_status()
+                st.image(resp.content, use_container_width=True)
             except Exception as exc:
                 logger.warning("render_onboard_card: thumbnail load failed: %s", exc, exc_info=True)
                 st.error("Failed to load thumbnail")
@@ -255,24 +254,19 @@ def render_onboard_card(item: Dict[str, Any]):
         st.caption("📷 Scope onboard")
 
 
-def render_image_card(image: Dict[str, Any], pp_healthy: bool = False):
+def render_image_card(image: dict[str, Any], pp_healthy: bool = False):
     """Render a single image card with thumbnail and metadata."""
     with st.container():
-        # Image thumbnail (or processed preview when toggled on)
+        base_thumb = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
         if image.get("processed") and image.get("processed_path"):
             show_processed = st.checkbox(
                 "Show Processed",
                 value=True,
                 key=f"show_proc_{image['id']}",
             )
-            if show_processed:
-                thumbnail_url = (
-                    f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256&processed=true"
-                )
-            else:
-                thumbnail_url = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
+            thumbnail_url = base_thumb + ("&processed=true" if show_processed else "")
         else:
-            thumbnail_url = f"{BACKEND_URL}/api/gallery/{image['id']}/thumbnail?size=256"
+            thumbnail_url = base_thumb
 
         try:
             st.image(thumbnail_url, use_container_width=True)
@@ -335,7 +329,7 @@ def render_image_card(image: Dict[str, Any], pp_healthy: bool = False):
             render_image_details(image)
 
 
-def render_image_details(image: Dict[str, Any]):
+def render_image_details(image: dict[str, Any]):
     """Render full image details in expander."""
     metadata = image["metadata"]
 
