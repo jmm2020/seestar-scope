@@ -24,7 +24,7 @@ import socket
 import threading
 import time
 from dataclasses import asdict, dataclass
-from typing import Any, List, Optional
+from typing import Any, List
 
 logger = logging.getLogger(__name__)
 
