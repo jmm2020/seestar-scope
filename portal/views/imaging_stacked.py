@@ -6,6 +6,7 @@ directly to the scope's :4800 channel — no bridge dependency).
 
 Kept separate from `imaging.py` so neither file grows into a god-file.
 """
+
 from __future__ import annotations
 
 import streamlit as st

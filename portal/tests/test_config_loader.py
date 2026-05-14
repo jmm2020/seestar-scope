@@ -24,7 +24,7 @@ def test_site_defaults_from_toml(tmp_path):
 
 def test_site_env_overrides_toml(tmp_path, monkeypatch):
     cfg_file = tmp_path / "config.toml"
-    cfg_file.write_text('[site]\nlatitude = 51.5\nlongitude = -0.1\n')
+    cfg_file.write_text("[site]\nlatitude = 51.5\nlongitude = -0.1\n")
     monkeypatch.setenv("SITE_LAT", "34.05")
     monkeypatch.setenv("SITE_LON", "-118.25")
     monkeypatch.setenv("SITE_NAME", "LA Observatory")
@@ -36,7 +36,7 @@ def test_site_env_overrides_toml(tmp_path, monkeypatch):
 
 def test_site_elevation_env_override(tmp_path, monkeypatch):
     cfg_file = tmp_path / "config.toml"
-    cfg_file.write_text('[site]\nelevation_m = 100.0\n')
+    cfg_file.write_text("[site]\nelevation_m = 100.0\n")
     monkeypatch.setenv("SITE_ELEVATION_M", "250.5")
     cfg = load_config(cfg_file)
     assert cfg.site_elevation_m == pytest.approx(250.5)
@@ -137,13 +137,17 @@ def test_alp_img_port_primary_takes_precedence_over_legacy(tmp_path, monkeypatch
 
 
 def test_alp_properties_from_toml(tmp_path, monkeypatch):
-    for var in ("ALP_HOST", "SEESTAR_ALP_HOST", "ALP_PORT",
-                "SEESTAR_ALP_PORT", "ALP_IMG_PORT", "SEESTAR_IMG_PORT"):
+    for var in (
+        "ALP_HOST",
+        "SEESTAR_ALP_HOST",
+        "ALP_PORT",
+        "SEESTAR_ALP_PORT",
+        "ALP_IMG_PORT",
+        "SEESTAR_IMG_PORT",
+    ):
         monkeypatch.delenv(var, raising=False)
     cfg_file = tmp_path / "config.toml"
-    cfg_file.write_text(
-        '[seestar]\nalp_host = "my-scope-host"\nalp_port = 6000\nimg_port = 7001\n'
-    )
+    cfg_file.write_text('[seestar]\nalp_host = "my-scope-host"\nalp_port = 6000\nimg_port = 7001\n')
     cfg = load_config(cfg_file)
     assert cfg.seestar_alp_host == "my-scope-host"
     assert cfg.seestar_alp_port == 6000

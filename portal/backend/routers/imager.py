@@ -5,13 +5,14 @@ SeestarImagerClient, bypassing the seestar_alp bridge. Designed for
 poll-style use by the imaging page: GET /api/imager/stacked.jpg with a
 cache-bust query param every 10-30 seconds.
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Response
-from fastapi.responses import Response as FastAPIResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
 from clients.seestar_imager import SeestarImagerClient, SeestarImagerError
 
@@ -29,6 +30,7 @@ def get_imager_client() -> SeestarImagerClient:
     global _imager_client
     if _imager_client is None:
         from backend.config import settings
+
         _imager_client = SeestarImagerClient(host=settings.seestar_ip)
     return _imager_client
 
@@ -69,4 +71,4 @@ def get_stacked_frame(quality: int = 90):
         "X-Frame-Height": str(frame.height),
         "X-Frame-Format": frame.frame_format,
     }
-    return FastAPIResponse(content=jpeg, media_type="image/jpeg", headers=headers)
+    return Response(content=jpeg, media_type="image/jpeg", headers=headers)

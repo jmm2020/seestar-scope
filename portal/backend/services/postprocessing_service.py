@@ -114,7 +114,10 @@ class PostprocessingService:
         except OSError as exc:
             logger.error(
                 "Failed to copy calibration frame %s from %s to %s: %s",
-                frame_type, src, dest, exc,
+                frame_type,
+                src,
+                dest,
+                exc,
             )
             return False
         setattr(self._calibration, f"{frame_type}_path", str(dest))
@@ -301,10 +304,9 @@ class PostprocessingService:
                 else:
                     data = np.zeros_like(data)
                 return data
-            else:
-                img = Image.open(path)
-                img.load()
-                return np.array(img, dtype=np.float64) / 255.0
+            img = Image.open(path)
+            img.load()
+            return np.array(img, dtype=np.float64) / 255.0
         except Exception as exc:
             logger.error("Failed to load master %s at %s: %s", frame_type, path, exc, exc_info=True)
             return None

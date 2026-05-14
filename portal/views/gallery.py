@@ -191,12 +191,9 @@ def render_image_grid(images: List[Dict[str, Any]], pp_healthy: bool = False):
 
     for idx in range(0, len(images), 3):
         cols = st.columns(3)
-
-        for col_idx, col in enumerate(cols):
-            img_idx = idx + col_idx
-            if img_idx < len(images):
-                with col:
-                    render_image_card(images[img_idx], pp_healthy=pp_healthy)
+        for col, image in zip(cols, images[idx:idx+3]):
+            with col:
+                render_image_card(image, pp_healthy=pp_healthy)
 
 
 def render_image_card(image: Dict[str, Any], pp_healthy: bool = False):
@@ -262,7 +259,9 @@ def render_image_card(image: Dict[str, Any], pp_healthy: bool = False):
                             detail = resp.json().get("detail", resp.text)
                         except Exception:
                             detail = f"HTTP {resp.status_code}"
-                        logger.error("Processing request failed (HTTP %s): %s", resp.status_code, resp.text)
+                        logger.error(
+                            "Processing request failed (HTTP %s): %s", resp.status_code, resp.text
+                        )
                         st.error(f"Processing failed: {detail}")
                 except Exception as exc:
                     st.error(f"Processing request failed: {exc}")

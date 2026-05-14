@@ -1,4 +1,5 @@
 """Tests for the /api/imager REST router — covers the 200/204/502 cases."""
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch

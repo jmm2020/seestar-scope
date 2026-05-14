@@ -102,6 +102,10 @@ def test_supported_methods_set():
             "iscope_get_app_state",
             "get_focuser_position",
             "pi_is_verified",
+            "iscope_start_stack",
+            "iscope_stop_view",
+            "set_control_value",
+            "set_setting",
         }
     )
 
@@ -177,9 +181,7 @@ def test_get_focuser_position_returns_none_for_unexpected_type():
 
 
 def test_non_zero_code_raises():
-    server = FakeScopeServer(
-        lambda req: {"code": 103, "result": None, "method": req["method"]}
-    )
+    server = FakeScopeServer(lambda req: {"code": 103, "result": None, "method": req["method"]})
     try:
         c = SeestarObserverClient("127.0.0.1", port=server.port)
         with pytest.raises(SeestarObserverError, match="code=103"):
@@ -284,5 +286,173 @@ def test_request_ids_increment_across_calls():
         # IDs must be strictly increasing.
         assert ids == sorted(ids)
         assert len(set(ids)) == len(ids)
+    finally:
+        server.close()
+
+
+# --- Write method tests ---
+
+
+def test_start_stack_sends_iscope_start_stack_then_set_control_value():
+    """start_stack() must send iscope_start_stack then set_control_value in order."""
+    requests_seen = []
+
+    def handler(req):
+        requests_seen.append(req)
+        return {"code": 0, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        c.start_stack(restart=False, gain=80)
+        assert len(requests_seen) == 2
+        assert requests_seen[0]["method"] == "iscope_start_stack"
+        assert requests_seen[0]["params"] == {"restart": False}
+        assert requests_seen[1]["method"] == "set_control_value"
+        assert requests_seen[1]["params"] == ["gain", 80]
+    finally:
+        server.close()
+
+
+def test_start_stack_restart_true_sends_correct_params():
+    """start_stack(restart=True) must send {"restart": true} to the scope."""
+    requests_seen = []
+
+    def handler(req):
+        requests_seen.append(req)
+        return {"code": 0, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        c.start_stack(restart=True, gain=120)
+        assert requests_seen[0]["params"] == {"restart": True}
+        assert requests_seen[1]["params"] == ["gain", 120]
+    finally:
+        server.close()
+
+
+def test_stop_stack_sends_iscope_stop_view_with_stack_stage():
+    """stop_stack() must send iscope_stop_view with {"stage": "Stack"}."""
+    requests_seen = []
+
+    def handler(req):
+        requests_seen.append(req)
+        return {"code": 0, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        c.stop_stack()
+        assert len(requests_seen) == 1
+        assert requests_seen[0]["method"] == "iscope_stop_view"
+        assert requests_seen[0]["params"] == {"stage": "Stack"}
+    finally:
+        server.close()
+
+
+def test_set_stack_gain_sends_list_format():
+    """set_stack_gain() must send set_control_value with a list, not a dict."""
+    requests_seen = []
+
+    def handler(req):
+        requests_seen.append(req)
+        return {"code": 0, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        c.set_stack_gain(200)
+        assert len(requests_seen) == 1
+        assert requests_seen[0]["method"] == "set_control_value"
+        assert requests_seen[0]["params"] == ["gain", 200]
+    finally:
+        server.close()
+
+
+def test_set_stack_lp_filter_on_sends_set_setting():
+    """set_stack_lp_filter(True) must send set_setting with {"stack_lenhance": true}."""
+    requests_seen = []
+
+    def handler(req):
+        requests_seen.append(req)
+        return {"code": 0, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        c.set_stack_lp_filter(True)
+        assert len(requests_seen) == 1
+        assert requests_seen[0]["method"] == "set_setting"
+        assert requests_seen[0]["params"] == {"stack_lenhance": True}
+    finally:
+        server.close()
+
+
+def test_set_stack_lp_filter_off_sends_false():
+    """set_stack_lp_filter(False) must send {"stack_lenhance": false}."""
+    requests_seen = []
+
+    def handler(req):
+        requests_seen.append(req)
+        return {"code": 0, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        c.set_stack_lp_filter(False)
+        assert requests_seen[0]["params"] == {"stack_lenhance": False}
+    finally:
+        server.close()
+
+
+def test_write_method_error_propagates():
+    """If scope returns code != 0 on a write method, SeestarObserverError is raised."""
+    server = FakeScopeServer(lambda req: {"code": 103, "result": None, "method": req["method"]})
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        with pytest.raises(SeestarObserverError, match="code=103"):
+            c.stop_stack()
+    finally:
+        server.close()
+
+
+def test_start_stack_returns_false_when_gain_set_fails():
+    """start_stack() returns False (not raises) when iscope_start_stack succeeds but
+    set_control_value fails — scope is stacking but gain was not applied."""
+
+    def handler(req):
+        if req["method"] == "iscope_start_stack":
+            return {"code": 0, "result": None, "method": req["method"]}
+        # set_control_value fails (e.g., firmware doesn't support it as write)
+        return {"code": 103, "result": None, "method": req["method"]}
+
+    server = FakeScopeServer(handler)
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        result = c.start_stack(gain=80)
+        assert result is False
+    finally:
+        server.close()
+
+
+def test_start_stack_returns_true_when_both_calls_succeed():
+    """start_stack() returns True when both iscope_start_stack and set_control_value succeed."""
+    server = FakeScopeServer(_ok(None))
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        result = c.start_stack(gain=80)
+        assert result is True
+    finally:
+        server.close()
+
+
+def test_start_stack_raises_when_iscope_start_stack_fails():
+    """start_stack() raises SeestarObserverError when iscope_start_stack itself fails."""
+    server = FakeScopeServer(lambda req: {"code": 103, "result": None, "method": req["method"]})
+    try:
+        c = SeestarObserverClient("127.0.0.1", port=server.port)
+        with pytest.raises(SeestarObserverError, match="code=103"):
+            c.start_stack(gain=80)
     finally:
         server.close()

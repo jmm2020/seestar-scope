@@ -11,6 +11,10 @@ the case of ``get_device_state``, briefly crash the firmware listener):
     test_connection, get_view_state, get_setting,
     iscope_get_app_state, get_focuser_position, pi_is_verified
 
+Write methods verified code 0 via direct probe 2026-05-13:
+
+    iscope_start_stack, iscope_stop_view, set_control_value, set_setting
+
 Calling methods outside the whitelist is refused client-side.
 """
 
@@ -19,7 +23,7 @@ import logging
 import socket
 import threading
 import time
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,11 @@ SUPPORTED_METHODS = frozenset(
         "iscope_get_app_state",
         "get_focuser_position",
         "pi_is_verified",
+        # Write methods verified code: 0 on firmware 7.34 via probe 2026-05-13
+        "iscope_start_stack",
+        "iscope_stop_view",
+        "set_control_value",
+        "set_setting",
     }
 )
 
@@ -49,7 +58,7 @@ class SeestarObserverClient:
         self._lock = threading.Lock()
         self._next_id = 1
 
-    def call(self, method: str, params: Optional[dict] = None) -> Any:
+    def call(self, method: str, params: Union[dict, list, None] = None) -> Any:
         if method not in SUPPORTED_METHODS:
             raise SeestarObserverError(
                 f"method '{method}' is not on the :{self.port} guest whitelist"
@@ -59,7 +68,7 @@ class SeestarObserverClient:
             self._next_id += 1
         return self._send(cid, method, params)
 
-    def _send(self, cid: int, method: str, params: Optional[dict]) -> Any:
+    def _send(self, cid: int, method: str, params: Union[dict, list, None]) -> Any:
         payload = {"id": cid, "method": method}
         if params is not None:
             payload["params"] = params
@@ -94,9 +103,7 @@ class SeestarObserverClient:
                         continue
                     code = obj.get("code", 0)
                     if code != 0:
-                        raise SeestarObserverError(
-                            f"method '{method}' returned code={code}"
-                        )
+                        raise SeestarObserverError(f"method '{method}' returned code={code}")
                     return obj.get("result")
             raise SeestarObserverError(
                 f"timed out after {self.timeout}s waiting for id={cid} ({method})"
@@ -131,3 +138,33 @@ class SeestarObserverClient:
     def get_app_state(self) -> dict:
         result = self.call("iscope_get_app_state")
         return result if isinstance(result, dict) else {}
+
+    def start_stack(self, restart: bool = False, gain: int = 80) -> bool:
+        """Start stacking; returns True if gain was also applied.
+
+        Raises SeestarObserverError if iscope_start_stack itself fails.
+        Returns False (and logs a warning) if gain set fails after a successful start.
+        """
+        self.call("iscope_start_stack", {"restart": restart})
+        try:
+            self.call("set_control_value", ["gain", gain])
+            return True
+        except SeestarObserverError:
+            logger.warning("Stack started but gain set failed; scope may use prior gain")
+            return False
+
+    def stop_stack(self) -> None:
+        """Stop the active stacking session. Raises SeestarObserverError on failure."""
+        self.call("iscope_stop_view", {"stage": "Stack"})
+
+    def set_stack_gain(self, gain: int) -> None:
+        """Adjust gain during stacking. Raises SeestarObserverError on failure."""
+        self.call("set_control_value", ["gain", gain])
+
+    def set_stack_lp_filter(self, on: bool) -> None:
+        """Toggle LP filter. Raises SeestarObserverError on failure.
+
+        Uses set_setting with stack_lenhance key — not yet live-probed on firmware 7.34.
+        If scope returns code 103, the SeestarObserverError propagates to caller.
+        """
+        self.call("set_setting", {"stack_lenhance": on})

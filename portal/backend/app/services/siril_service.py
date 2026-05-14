@@ -83,7 +83,6 @@ class SirilService:
         self.processed_dir = self.data_root / "processed"
         self.stacked_dir = self.gallery_dir  # Output to gallery for indexing
 
-
     def process_session(
         self,
         session_id: str,
@@ -331,9 +330,8 @@ class SirilService:
                 "session_id": session_id,
                 "output_files": [str(f) for f in stacked_files],
             }
-        else:
-            return {
-                "status": "processing",
-                "session_id": session_id,
-                "working_dir": str(session_dir),
-            }
+        return {
+            "status": "processing",
+            "session_id": session_id,
+            "working_dir": str(session_dir),
+        }

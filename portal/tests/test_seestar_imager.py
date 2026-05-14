@@ -16,6 +16,7 @@ Verified live header capture from firmware 7.34 at 192.168.0.132:4800 on
 This corresponds to "no stack currently available" — request acknowledged,
 zero-size payload follows.
 """
+
 import io
 import struct
 import sys
@@ -35,14 +36,16 @@ from clients.seestar_imager import (
 )
 
 
-LIVE_EMPTY_HEADER = struct.pack(">HHHIHHBBHH", 0x03c3, 0x0002, 0x0050, 21, 0x7477, 0, 1, 23, 0, 0) + b"\x00" * 60
+LIVE_EMPTY_HEADER = (
+    struct.pack(">HHHIHHBBHH", 0x03C3, 0x0002, 0x0050, 21, 0x7477, 0, 1, 23, 0, 0) + b"\x00" * 60
+)
 assert len(LIVE_EMPTY_HEADER) == 80
 
 
 def _build_header(size: int, frame_id: int, width: int, height: int) -> bytes:
     """Build an 80-byte header matching the scope's wire format."""
     fmt = ">HHHIHHBBHH"
-    head = struct.pack(fmt, 0x03c3, 0x0002, 0x0050, size, 0, 0, 1, frame_id, width, height)
+    head = struct.pack(fmt, 0x03C3, 0x0002, 0x0050, size, 0, 0, 1, frame_id, width, height)
     return head + b"\x00" * (80 - len(head))
 
 

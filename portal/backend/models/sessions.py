@@ -39,8 +39,12 @@ class SessionRecord(BaseModel):
         None, description="{seeing, transparency, temp}"
     )
     created_at: Optional[datetime] = Field(None, description="DB row creation time")
-    frame_count: Optional[int] = Field(None, description="Frame count — set when include_frame_counts=true")
-    total_exposure_s: Optional[float] = Field(None, description="Total exposure seconds — set when include_frame_counts=true")
+    frame_count: Optional[int] = Field(
+        None, description="Frame count — set when include_frame_counts=true"
+    )
+    total_exposure_s: Optional[float] = Field(
+        None, description="Total exposure seconds — set when include_frame_counts=true"
+    )
 
 
 class FrameRecord(BaseModel):

@@ -7,6 +7,7 @@ import time
 import requests
 import streamlit as st
 
+from clients.seestar_observer import SeestarObserverError
 from clients.sessions_client import SessionsClient
 from utils.image_processing import alpaca_imagearray_to_image, save_image
 from views.imaging_stacked import render_stacked_image_panel
@@ -34,6 +35,7 @@ MODE_LABELS = {
 
 try:
     from backend.config import settings as _backend_settings
+
     BACKEND_PORT = _backend_settings.port  # sourced from config.py / .env
 except Exception:
     BACKEND_PORT = 8503
@@ -291,8 +293,8 @@ def _render_live_stack_panel():
 # --- Stacking Controls ---
 
 
-def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = True):
-    """Gain, exposure, LP filter, and start/stop/restart buttons; disabled when alp_available is False."""
+def _render_stacking_controls(alpaca, view, is_stacking):
+    """Gain, exposure, LP filter, and start/stop/restart buttons."""
     st.subheader("Stacking Controls")
 
     current_gain = view.get("gain", 80) if view else 80
@@ -324,9 +326,15 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
             help="Begin a new stacking session at the current gain/exposure",
         ):
             with st.spinner("Starting stack..."):
-                alpaca.start_stack(restart=False, gain=gain)
-                if lp_filter != lp_on:
-                    alpaca.set_stack_lp_filter(lp_filter)
+                try:
+                    gain_applied = alpaca.observer.start_stack(restart=False, gain=gain)
+                    if not gain_applied:
+                        st.warning("Stack started — gain update failed; using prior scope gain.")
+                    if lp_filter != lp_on:
+                        alpaca.observer.set_stack_lp_filter(lp_filter)
+                except SeestarObserverError as exc:
+                    st.error(f"Start Stack failed: {exc}")
+                    st.rerun()
             # Auto-create session when stacking starts
             if st.session_state.get("active_session_id") is None:
                 _sc = SessionsClient()
@@ -350,20 +358,27 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
             help="Stop the active stacking session",
         ):
             with st.spinner("Stopping..."):
-                alpaca.stop_stack()
-            # End active session on stop
-            sid = st.session_state.get("active_session_id")
-            if sid is not None:
-                _sc = SessionsClient()
-                result = _sc.end_session(sid)
-                if result is None:
-                    st.warning(
-                        f"Session {sid} could not be closed in history — backend unreachable"
-                    )
-                    logger.warning(f"Session {sid} end_session failed; session may appear open in history")
+                try:
+                    alpaca.observer.stop_stack()
+                except SeestarObserverError as exc:
+                    st.error(f"Stop Stack failed: {exc}")
+                    st.rerun()
                 else:
-                    logger.info(f"Session {sid} ended")
-                st.session_state["active_session_id"] = None
+                    # Only runs if stop_stack() succeeded — session cleanup is safe here
+                    sid = st.session_state.get("active_session_id")
+                    if sid is not None:
+                        _sc = SessionsClient()
+                        result = _sc.end_session(sid)
+                        if result is None:
+                            st.warning(
+                                f"Session {sid} could not be closed in history — backend unreachable"
+                            )
+                            logger.warning(
+                                f"Session {sid} end_session failed; session may appear open in history"
+                            )
+                        else:
+                            logger.info(f"Session {sid} ended")
+                        st.session_state["active_session_id"] = None
             st.rerun()
     with col_restart:
         if st.button(
@@ -373,11 +388,15 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
             help="Stop the current stack (if any) and start a fresh one",
         ):
             with st.spinner("Restarting stack..."):
-                alpaca.stop_stack()
-                time.sleep(1)
-                alpaca.start_stack(restart=True, gain=gain)
-                if lp_filter != lp_on:
-                    alpaca.set_stack_lp_filter(lp_filter)
+                try:
+                    alpaca.observer.stop_stack()
+                    time.sleep(1)
+                    alpaca.observer.start_stack(restart=True, gain=gain)
+                    if lp_filter != lp_on:
+                        alpaca.observer.set_stack_lp_filter(lp_filter)
+                except SeestarObserverError as exc:
+                    st.error(f"Restart Stack failed: {exc}")
+                    st.rerun()
             st.rerun()
 
     # Apply gain change if user adjusted slider while stacking
@@ -387,11 +406,14 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
             key="btn_apply_stack_gain",
             help="Send current slider value to the Seestar without restarting",
         ):
-            alpaca.set_stack_gain(gain)
-            st.success(f"Gain set to {gain}")
+            try:
+                alpaca.observer.set_stack_gain(gain)
+                st.success(f"Gain set to {gain}")
+            except SeestarObserverError as exc:
+                st.error(f"Apply Gain failed: {exc}")
 
     # Reject & Restart — discard contaminated sub-stack and start fresh
-    if is_stacking and alp_available:
+    if is_stacking:
         st.divider()
         col_rej, col_rej_help = st.columns([1, 3])
         with col_rej:
@@ -404,20 +426,14 @@ def _render_stacking_controls(alpaca, view, is_stacking, alp_available: bool = T
             ):
                 with st.spinner("Restarting stack…"):
                     try:
-                        stop_resp = alpaca.stop_stack()
+                        alpaca.observer.stop_stack()
                         time.sleep(1)
-                        start_resp = alpaca.start_stack(restart=True, gain=gain)
-                    except Exception as exc:
+                        alpaca.observer.start_stack(restart=True, gain=gain)
+                        if lp_filter != lp_on:
+                            alpaca.observer.set_stack_lp_filter(lp_filter)
+                        st.success("Stack restarted — accumulating fresh frames from this point.")
+                    except SeestarObserverError as exc:
                         st.error(f"Reject & Restart failed: {exc}")
-                        st.rerun()
-                        st.stop()
-                if stop_resp.success and start_resp.success:
-                    st.success("Stack restarted — accumulating fresh frames from this point.")
-                else:
-                    st.error(
-                        f"Reject failed: stop={'OK' if stop_resp.success else stop_resp.error_message}"
-                        f", start={'OK' if start_resp.success else start_resp.error_message}"
-                    )
                 st.rerun()
         with col_rej_help:
             st.caption(
@@ -1157,7 +1173,7 @@ def render_imaging(alpaca, config):
     st.divider()
 
     # Stacking controls
-    _render_stacking_controls(alpaca, view, is_stacking, alp_available)
+    _render_stacking_controls(alpaca, view, is_stacking)
 
     # Stack settings expander
     _render_stack_settings(alpaca)
