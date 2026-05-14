@@ -243,9 +243,7 @@ def render_onboard_card(item: Dict[str, Any]):
             st.caption("🎬 Video (requires direct LAN access to scope)")
             st.video(item["full_url"])  # browser fetches directly from scope :80
         else:
-            # Extract the relative path from the full thumb_url and pass it as
-            # ?path= so the backend constructs the scope URL internally (no SSRF).
-            path_part = item["thumb_url"].split("/", 3)[-1]  # strip http://host:port/
+            path_part = urllib.parse.urlparse(item["thumb_url"]).path.lstrip("/")
             encoded = urllib.parse.quote(path_part, safe="/")
             thumb_proxy = f"{BACKEND_URL}/api/gallery/onboard/thumbnail?path={encoded}"
             try:
