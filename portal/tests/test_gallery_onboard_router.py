@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from backend.routers import gallery as gallery_router  # noqa: E402
 from backend.routers.gallery_onboard import router  # noqa: E402
 from clients.seestar_archive import OnboardItem, SeestarArchiveError  # noqa: E402
 
@@ -213,8 +214,6 @@ def test_health_returns_unreachable_when_client_offline():
 # These tests catch routing collisions that are invisible when each router is
 # tested in isolation.  The dual-router app mirrors the registration order in
 # main.py: onboard router first, then the local gallery router.
-
-from backend.routers import gallery as gallery_router  # noqa: E402
 
 
 def _dual_router_app() -> TestClient:
