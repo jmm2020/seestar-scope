@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from backend.routers import gallery as gallery_router  # noqa: E402
 from backend.routers.gallery_onboard import router  # noqa: E402
 from clients.seestar_archive import OnboardItem, SeestarArchiveError  # noqa: E402
 
@@ -206,3 +207,62 @@ def test_health_returns_unreachable_when_client_offline():
 
     assert resp.status_code == 200
     assert resp.json() == {"status": "unreachable"}
+
+
+# ── Integration tests: both routers mounted together ──────────────────────────
+#
+# These tests catch routing collisions that are invisible when each router is
+# tested in isolation.  The dual-router app mirrors the registration order in
+# main.py: onboard router first, then the local gallery router.
+
+
+def _dual_router_app() -> TestClient:
+    """Minimal app with both gallery routers mounted in production order."""
+    app = FastAPI()
+    app.include_router(router)  # gallery_onboard: prefix="/api/gallery/onboard"
+    app.include_router(gallery_router.router, prefix="/api/gallery")
+    return TestClient(app)
+
+
+def test_onboard_thumbnail_not_intercepted_by_local_gallery_wildcard():
+    """Regression: /api/gallery/onboard/thumbnail must not return 422.
+
+    Before the fix, gallery.router's /{image_id}/thumbnail route matched
+    'onboard' and returned 422 int-parsing error.
+    """
+    fake_resp = MagicMock()
+    fake_resp.status_code = 200
+    fake_resp.content = b"\xff\xd8\xff\xe0fakejpeg"
+
+    stub = MagicMock()
+    stub.host = "192.168.0.132"
+    stub.http_port = 80
+
+    with patch("backend.routers.gallery_onboard.get_archive_client", return_value=stub):
+        with patch("backend.routers.gallery_onboard.requests.get", return_value=fake_resp):
+            resp = _dual_router_app().get(
+                "/api/gallery/onboard/thumbnail",
+                params={"path": "Solar_video/2024-04-08-141802-Solar-timelapse_thn.jpg"},
+            )
+
+    assert resp.status_code == 200, f"Expected 200 but got {resp.status_code}: {resp.text}"
+    assert resp.headers["content-type"] == "image/jpeg"
+
+
+def test_onboard_list_not_intercepted_by_local_gallery_wildcard():
+    """Regression: /api/gallery/onboard/ list must still work with both routers mounted."""
+    stub = MagicMock()
+    stub.list_items.return_value = [
+        OnboardItem(
+            name="img",
+            thumb_url="http://scope/t_thn.jpg",
+            full_url="http://scope/t.jpg",
+            is_video=False,
+        ),
+    ]
+
+    with patch("backend.routers.gallery_onboard.get_archive_client", return_value=stub):
+        resp = _dual_router_app().get("/api/gallery/onboard/")
+
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
