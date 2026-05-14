@@ -46,13 +46,14 @@ The portal backend talks to the S50 directly at `http://192.168.0.132:32323` (na
 | `clients/alpaca_client.py` | ASCOM ALPACA REST client (telescope, camera, focuser, filter, switch) |
 | `clients/stellarium_client.py` | Stellarium Remote Control client |
 | `clients/sessions_client.py` | HTTP client for sessions API — used by Streamlit views |
+| `clients/seestar_archive.py` | Guest JSON-RPC client for the Seestar :4701 channel; `get_albums` → `OnboardItem` list; constructs HTTP :80 URLs for thumbnails and full-res assets |
 | `views/conditions.py` | Observing conditions page — weather + sun/moon/twilight dashboard |
 | `views/dashboard.py` | Live status — 2 s auto-refresh |
 | `views/goto.py` | GoTo/Slew — manual coords, Stellarium, Messier/NGC catalog |
 | `views/imaging.py` | Camera control — exposure, gain, filter, loop mode; live-stack WebSocket panel |
 | `views/stacking.py` | Siril stacking session management UI (start/add-frame/process/abort) |
 | `views/autofocus.py` | Autofocus V-curve run — drive focuser to HFR minimum |
-| `views/gallery.py` | Image gallery — browse captured frames, thumbnails, post-processing trigger |
+| `views/gallery.py` | Image gallery — browse local captured frames and scope onboard archive; Source filter (All / Local / Scope onboard); thumbnails, post-processing trigger |
 | `views/live_status.py` | WebSocket status dashboard — active client count + telescope telemetry stream |
 | `views/platesolve.py` | Plate solving — upload/solve FITS frames via ASTAP integration |
 | `views/skymap.py` | Sky map — Stellarium-web embed for target selection |
@@ -81,6 +82,7 @@ The FastAPI backend (`seestar-portal-backend`, port `:8503`) handles all persist
 | `config.py` | `Settings(BaseSettings)` — paths, ports, env-var overrides |
 | `routers/postprocessing.py` | POST `/api/postprocessing/apply` (async job), GET `/jobs/{id}`, calibration frame CRUD |
 | `routers/gallery.py` | Image gallery CRUD, thumbnail serving |
+| `routers/gallery_onboard.py` | Onboard archive read-through: `GET /api/gallery/onboard/` (list), `GET /api/gallery/onboard/thumbnail` (proxy), `GET /api/gallery/onboard/health`; prefix defined in router |
 | `routers/autofocus.py` | Autofocus run endpoint |
 | `routers/platesolve.py` | Plate-solve REST endpoints — ASTAP integration |
 | `routers/sessions.py` | Sessions CRUD — 6 endpoints under `/api/sessions` (note: also registered at `main.py:102` with explicit prefix) |
@@ -305,3 +307,5 @@ The Streamlit UI's live-stack panel (`views/imaging.py`) connects directly from 
 | 8504 | seestar-enhance | HTTP REST |
 | 8091 | Stellarium Remote Control | HTTP REST |
 | 32323 | Seestar S50 (native ALPACA) | HTTP REST |
+| 4701 | Seestar S50 (guest JSON-RPC) | TCP (JSON-RPC over raw socket) |
+| 80 | Seestar S50 (HTTP static file server) | HTTP — serves MyWorks/ album content |

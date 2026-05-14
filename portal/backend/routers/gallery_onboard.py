@@ -52,12 +52,18 @@ def list_onboard_items():
 
 
 @router.get("/thumbnail")
-def proxy_thumbnail(url: str = Query(..., description="Absolute scope thumbnail URL")):
-    """Proxy-fetch a scope thumbnail so the browser caches it under our origin."""
+def proxy_thumbnail(path: str = Query(..., description="Relative path on scope HTTP server")):
+    """Proxy-fetch a scope thumbnail so the browser caches it under our origin.
+
+    Accepts a relative path (not a full URL) so the backend constructs the
+    target URL internally — eliminates SSRF risk from a free-form url param.
+    """
+    client = get_archive_client()
+    scope_url = f"http://{client.host}:{client.http_port}/{path.lstrip('/')}"
     try:
-        resp = requests.get(url, timeout=10, stream=False)
+        resp = requests.get(scope_url, timeout=10, stream=False)
     except requests.RequestException as exc:
-        logger.warning("thumbnail proxy fetch failed for %s: %s", url, exc)
+        logger.warning("thumbnail proxy fetch failed for %s: %s", scope_url, exc)
         raise HTTPException(
             status_code=502, detail=f"thumbnail fetch failed: {exc}"
         ) from exc
@@ -66,6 +72,8 @@ def proxy_thumbnail(url: str = Query(..., description="Absolute scope thumbnail 
             status_code=502,
             detail=f"scope returned HTTP {resp.status_code} for thumbnail",
         )
+    if len(resp.content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=502, detail="thumbnail too large")
     return Response(
         content=resp.content,
         media_type="image/jpeg",

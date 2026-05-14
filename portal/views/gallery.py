@@ -9,7 +9,7 @@ import urllib.parse
 import streamlit as st
 import requests
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -35,9 +35,6 @@ def render_gallery():
     if not pp_healthy:
         st.warning("⚠️ Post-processing service is unreachable — Process buttons disabled.")
 
-    # Display gallery stats
-    render_gallery_stats()
-
     st.divider()
 
     # Filter controls
@@ -52,9 +49,12 @@ def render_gallery():
              "the Seestar's built-in archive over :4701.",
     )
 
-    # Fetch and display images
+    # Fetch items once; pass count into stats to avoid a second :4701 round-trip.
     local_images = fetch_images(filters) if source in ("All", "Local captures") else []
     onboard_items = fetch_onboard_items() if source in ("All", "Scope onboard") else []
+
+    # Display gallery stats
+    render_gallery_stats(onboard_count=len(onboard_items))
 
     if not local_images and not onboard_items:
         st.info("No images found. Capture some images first, or check the scope connection.")
@@ -87,21 +87,12 @@ def check_postprocessing_health() -> bool:
         return False
 
 
-def render_gallery_stats():
+def render_gallery_stats(onboard_count: int = 0):
     """Display gallery statistics summary."""
     try:
         response = requests.get(f"{BACKEND_URL}/api/gallery/stats", timeout=5)
         if response.status_code == 200:
             stats = response.json()
-
-            try:
-                ob_resp = requests.get(
-                    f"{BACKEND_URL}/api/gallery/onboard/", timeout=5
-                )
-                onboard_count = len(ob_resp.json()) if ob_resp.ok else 0
-            except Exception as exc:
-                logger.debug("Onboard stats unavailable: %s", exc)
-                onboard_count = 0
 
             col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -221,7 +212,7 @@ def fetch_onboard_items() -> List[Dict[str, Any]]:
 
 def render_image_grid(
     images: List[Dict[str, Any]],
-    onboard_items: List[Dict[str, Any]] = None,
+    onboard_items: Optional[List[Dict[str, Any]]] = None,
     pp_healthy: bool = False,
 ):
     """Render local + onboard items in a responsive grid."""
@@ -249,17 +240,18 @@ def render_onboard_card(item: Dict[str, Any]):
     with st.container():
         is_video = item.get("is_video", False)
         if is_video:
-            st.caption("🎬 Video")
-            try:
-                st.video(item["full_url"])
-            except Exception:
-                st.error("Failed to load video")
+            st.caption("🎬 Video (requires direct LAN access to scope)")
+            st.video(item["full_url"])  # browser fetches directly from scope :80
         else:
-            encoded = urllib.parse.quote(item["thumb_url"], safe="")
-            thumb_proxy = f"{BACKEND_URL}/api/gallery/onboard/thumbnail?url={encoded}"
+            # Extract the relative path from the full thumb_url and pass it as
+            # ?path= so the backend constructs the scope URL internally (no SSRF).
+            path_part = item["thumb_url"].split("/", 3)[-1]  # strip http://host:port/
+            encoded = urllib.parse.quote(path_part, safe="/")
+            thumb_proxy = f"{BACKEND_URL}/api/gallery/onboard/thumbnail?path={encoded}"
             try:
                 st.image(thumb_proxy, use_container_width=True)
-            except Exception:
+            except Exception as exc:
+                logger.warning("render_onboard_card: thumbnail load failed: %s", exc, exc_info=True)
                 st.error("Failed to load thumbnail")
         st.markdown(f"**{item.get('name', '(unnamed)')}**")
         st.caption("📷 Scope onboard")

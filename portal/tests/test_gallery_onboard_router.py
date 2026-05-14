@@ -81,11 +81,16 @@ def test_thumbnail_proxy_returns_200_with_jpeg():
     fake_resp.status_code = 200
     fake_resp.content = b"\xff\xd8\xff\xe0fakejpeg"
 
-    with patch("backend.routers.gallery_onboard.requests.get", return_value=fake_resp):
-        resp = _app_with_router().get(
-            "/api/gallery/onboard/thumbnail",
-            params={"url": "http://scope/MyWorks/x_thn.jpg"},
-        )
+    stub = MagicMock()
+    stub.host = "192.168.0.132"
+    stub.http_port = 80
+
+    with patch("backend.routers.gallery_onboard.get_archive_client", return_value=stub):
+        with patch("backend.routers.gallery_onboard.requests.get", return_value=fake_resp):
+            resp = _app_with_router().get(
+                "/api/gallery/onboard/thumbnail",
+                params={"path": "MyWorks/x_thn.jpg"},
+            )
 
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/jpeg"
@@ -93,15 +98,46 @@ def test_thumbnail_proxy_returns_200_with_jpeg():
     assert resp.content == b"\xff\xd8\xff\xe0fakejpeg"
 
 
+def test_thumbnail_proxy_constructs_url_from_client_host():
+    """Backend must build the scope URL from client.host/http_port, not the caller."""
+    fake_resp = MagicMock()
+    fake_resp.status_code = 200
+    fake_resp.content = b"jpeg"
+
+    stub = MagicMock()
+    stub.host = "10.0.0.1"
+    stub.http_port = 80
+
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured["url"] = url
+        return fake_resp
+
+    with patch("backend.routers.gallery_onboard.get_archive_client", return_value=stub):
+        with patch("backend.routers.gallery_onboard.requests.get", side_effect=fake_get):
+            _app_with_router().get(
+                "/api/gallery/onboard/thumbnail",
+                params={"path": "MyWorks/img_thn.jpg"},
+            )
+
+    assert captured["url"] == "http://10.0.0.1:80/MyWorks/img_thn.jpg"
+
+
 def test_thumbnail_proxy_scope_unreachable_returns_502():
-    with patch(
-        "backend.routers.gallery_onboard.requests.get",
-        side_effect=requests.ConnectionError("connection refused"),
-    ):
-        resp = _app_with_router().get(
-            "/api/gallery/onboard/thumbnail",
-            params={"url": "http://scope/MyWorks/x_thn.jpg"},
-        )
+    stub = MagicMock()
+    stub.host = "192.168.0.132"
+    stub.http_port = 80
+
+    with patch("backend.routers.gallery_onboard.get_archive_client", return_value=stub):
+        with patch(
+            "backend.routers.gallery_onboard.requests.get",
+            side_effect=requests.ConnectionError("connection refused"),
+        ):
+            resp = _app_with_router().get(
+                "/api/gallery/onboard/thumbnail",
+                params={"path": "MyWorks/x_thn.jpg"},
+            )
 
     assert resp.status_code == 502
     assert "connection refused" in resp.json()["detail"]
@@ -112,14 +148,40 @@ def test_thumbnail_proxy_non_200_returns_502():
     fake_resp.status_code = 404
     fake_resp.content = b""
 
-    with patch("backend.routers.gallery_onboard.requests.get", return_value=fake_resp):
-        resp = _app_with_router().get(
-            "/api/gallery/onboard/thumbnail",
-            params={"url": "http://scope/missing_thn.jpg"},
-        )
+    stub = MagicMock()
+    stub.host = "192.168.0.132"
+    stub.http_port = 80
+
+    with patch("backend.routers.gallery_onboard.get_archive_client", return_value=stub):
+        with patch("backend.routers.gallery_onboard.requests.get", return_value=fake_resp):
+            resp = _app_with_router().get(
+                "/api/gallery/onboard/thumbnail",
+                params={"path": "MyWorks/missing_thn.jpg"},
+            )
 
     assert resp.status_code == 502
     assert "HTTP 404" in resp.json()["detail"]
+
+
+def test_thumbnail_proxy_rejects_oversized_response():
+    """Responses larger than 5 MB must return 502 (size guard)."""
+    fake_resp = MagicMock()
+    fake_resp.status_code = 200
+    fake_resp.content = b"x" * (5 * 1024 * 1024 + 1)
+
+    stub = MagicMock()
+    stub.host = "192.168.0.132"
+    stub.http_port = 80
+
+    with patch("backend.routers.gallery_onboard.get_archive_client", return_value=stub):
+        with patch("backend.routers.gallery_onboard.requests.get", return_value=fake_resp):
+            resp = _app_with_router().get(
+                "/api/gallery/onboard/thumbnail",
+                params={"path": "MyWorks/huge.jpg"},
+            )
+
+    assert resp.status_code == 502
+    assert "too large" in resp.json()["detail"]
 
 
 def test_health_returns_ok_when_client_reachable():

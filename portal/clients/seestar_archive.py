@@ -28,6 +28,11 @@ from typing import Any, List
 
 logger = logging.getLogger(__name__)
 
+# Methods verified as whitelisted on the :4701 guest channel (firmware 7.34).
+# Mirrors SeestarObserverClient.SUPPORTED_METHODS — the same firmware crash risk
+# applies here; add new methods only after confirming they work on the guest channel.
+ARCHIVE_METHODS = frozenset({"get_albums"})
+
 
 class SeestarArchiveError(Exception):
     """Raised when an archive request fails (timeout, socket error, code != 0)."""
@@ -70,6 +75,12 @@ class SeestarArchiveClient:
         self._next_id = 1
 
     def _rpc_call(self, method: str, params: Any = None) -> Any:
+        # Socket framing mirrors SeestarObserverClient._send (seestar_observer.py).
+        # Keep the two in sync; a shared base class is tracked as a follow-up.
+        if method not in ARCHIVE_METHODS:
+            raise SeestarArchiveError(
+                f"method '{method}' is not on the :4701 archive whitelist"
+            )
         with self._lock:
             cid = self._next_id
             self._next_id += 1
@@ -102,8 +113,16 @@ class SeestarArchiveClient:
                     try:
                         obj = json.loads(line.decode("utf-8", errors="replace"))
                     except json.JSONDecodeError:
+                        logger.debug(
+                            "_rpc_call: skipped non-JSON line (len=%d) waiting for id=%d",
+                            len(line), cid,
+                        )
                         continue
                     if obj.get("id") != cid:
+                        logger.debug(
+                            "_rpc_call: ignoring push event id=%s waiting for id=%d",
+                            obj.get("id"), cid,
+                        )
                         continue
                     code = obj.get("code", 0)
                     if code != 0:
@@ -132,7 +151,10 @@ class SeestarArchiveClient:
                        "files": [{"name": "Solar_video", "thn": "Solar_video/...thn.jpg", ...}]}]}
         """
         result = self._rpc_call("get_albums")
-        return result if isinstance(result, dict) else {}
+        if not isinstance(result, dict):
+            logger.warning("get_albums: expected dict result, got %s — returning {}", type(result).__name__)
+            return {}
+        return result
 
     def list_items(self) -> List[OnboardItem]:
         """Flatten every album group's files into a list of ``OnboardItem``."""
