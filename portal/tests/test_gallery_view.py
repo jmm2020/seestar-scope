@@ -137,13 +137,13 @@ def test_fetch_onboard_items_returns_list_on_200(monkeypatch):
     assert result[0]["name"] == "img"
 
 
-def test_fetch_onboard_items_returns_empty_on_error(monkeypatch):
+def test_fetch_onboard_items_returns_empty_on_error():
     with patch("views.gallery.requests.get", side_effect=Exception("boom")):
         result = fetch_onboard_items()
     assert result == []
 
 
-def test_fetch_onboard_items_returns_empty_on_non_200(monkeypatch):
+def test_fetch_onboard_items_returns_empty_on_non_200():
     fake_response = MagicMock()
     fake_response.status_code = 502
     fake_response.text = "scope offline"
