@@ -93,7 +93,7 @@ async def get_gallery_stats(db: GalleryDatabase = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{image_id}", response_model=ImageRecord)
+@router.get("/{image_id:int}", response_model=ImageRecord)
 async def get_image_detail(image_id: int, db: GalleryDatabase = Depends(get_db)):
     """
     Get full details for a specific image.
@@ -113,7 +113,7 @@ async def get_image_detail(image_id: int, db: GalleryDatabase = Depends(get_db))
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{image_id}/thumbnail")
+@router.get("/{image_id:int}/thumbnail")
 async def get_thumbnail(
     image_id: int, size: int = Query(256, ge=64, le=1024), db: GalleryDatabase = Depends(get_db)
 ):
@@ -153,7 +153,7 @@ async def get_thumbnail(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{image_id}/tags")
+@router.post("/{image_id:int}/tags")
 async def add_tags(image_id: int, tags: List[str], db: GalleryDatabase = Depends(get_db)):
     """
     Add tags to an image (merges with existing tags).

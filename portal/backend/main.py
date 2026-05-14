@@ -95,8 +95,8 @@ app.add_middleware(
 
 # Register routers
 app.include_router(telescope.router, prefix="/api/telescope", tags=["telescope"])
+app.include_router(gallery_onboard.router)  # prefix="/api/gallery/onboard" defined in router — must precede gallery wildcard
 app.include_router(gallery.router, prefix="/api/gallery", tags=["gallery"])
-app.include_router(gallery_onboard.router)  # prefix="/api/gallery/onboard" defined in router
 app.include_router(processing.router, prefix="/api/processing", tags=["processing"])
 app.include_router(autofocus.router)  # prefix="/api/autofocus" defined in router
 app.include_router(platesolve.router)  # prefix="/api/platesolve" defined in router
