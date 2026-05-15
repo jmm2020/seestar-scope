@@ -3,9 +3,12 @@
 import logging
 import os
 import time
+from datetime import datetime
+from io import BytesIO
 
 import requests
 import streamlit as st
+from PIL import Image
 
 from clients.seestar_observer import SeestarObserverError
 from clients.sessions_client import SessionsClient
@@ -1078,13 +1081,20 @@ def _render_preview_and_save(alpaca, config):
     enhanced = _render_enhancement_panel(image)
     _render_comparison(image, enhanced)
 
-    col_name, col_save_orig, col_save_enh = st.columns([3, 1, 1])
+    def _png_bytes(img: Image.Image) -> bytes:
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    col_name, col_save_orig, col_dl_orig, col_save_enh, col_dl_enh = st.columns([3, 1, 1, 1, 1])
     with col_name:
         target_name = st.text_input(
             "Target name",
             value=st.session_state.get("slewing_target", "capture"),
             key="save_target_name",
         )
+    _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    _safe_target = target_name.replace(" ", "_").replace("/", "_") or "capture"
     with col_save_orig:
         st.write("")
         st.write("")
@@ -1103,6 +1113,18 @@ def _render_preview_and_save(alpaca, config):
                     gain=st.session_state.get("gain_slider", 80),
                     filter_name="Unknown",
                 )
+    with col_dl_orig:
+        st.write("")
+        st.write("")
+        st.download_button(
+            "⬇ Raw",
+            data=_png_bytes(image),
+            file_name=f"{_safe_target}_{_ts}.png",
+            mime="image/png",
+            key="dl_raw",
+            use_container_width=True,
+            help="Download the unenhanced capture to your device.",
+        )
     with col_save_enh:
         st.write("")
         st.write("")
@@ -1115,6 +1137,19 @@ def _render_preview_and_save(alpaca, config):
             save_dir = getattr(config, "save_directory", "./captures")
             filepath = save_image(enhanced, f"{target_name}_enhanced", save_dir=save_dir)
             st.success(f"Enhanced saved: {filepath}")
+    with col_dl_enh:
+        st.write("")
+        st.write("")
+        st.download_button(
+            "⬇ Enhanced",
+            data=_png_bytes(enhanced),
+            file_name=f"{_safe_target}_enhanced_{_ts}.png",
+            mime="image/png",
+            key="dl_enhanced",
+            type="primary",
+            use_container_width=True,
+            help="Download the enhanced capture to your device.",
+        )
 
     # Loop mode auto-save - saves the enhanced image
     if st.session_state.get("loop_mode"):
