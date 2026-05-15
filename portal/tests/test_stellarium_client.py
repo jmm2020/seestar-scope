@@ -55,7 +55,7 @@ def test_stellarium_object_below_horizon():
 
 def test_client_default_construction():
     client = StellariumClient()
-    assert client.base_url == "http://localhost:8091"
+    assert client.base_url == "http://localhost:8090"
     assert client.timeout == 5
 
 

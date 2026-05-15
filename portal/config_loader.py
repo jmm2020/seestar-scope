@@ -83,7 +83,7 @@ class Config:
 
     @property
     def stellarium_port(self) -> int:
-        return int(os.environ.get("STELLARIUM_PORT", self.stellarium.get("port", 8091)))
+        return int(os.environ.get("STELLARIUM_PORT", self.stellarium.get("port", 8090)))
 
     @property
     def auto_connect(self) -> bool:

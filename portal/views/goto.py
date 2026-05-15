@@ -204,7 +204,11 @@ def _render_stellarium_panel(alpaca, stellarium):
     """Stellarium selected-object panel with Slew button."""
     st.subheader("Stellarium")
     if not stellarium.is_available():
-        st.warning("Stellarium Remote Control not available on port 8091")
+        st.warning(
+            f"Stellarium Remote Control not reachable at {stellarium.base_url}. "
+            "Check Settings → Stellarium and confirm the plugin is enabled "
+            "(Configuration → Plugins → Remote Control → Configure → Start server)."
+        )
         return
 
     obj = stellarium.get_selected_object()

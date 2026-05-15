@@ -66,11 +66,12 @@ def render_settings(config, alpaca=None, stellarium=None):
         )
         st_port = st.number_input(
             "Stellarium Port",
-            value=_get("stellarium", "port", 8091),
+            value=_get("stellarium", "port", 8090),
             min_value=1,
             max_value=65535,
             help="Stellarium Remote Control plugin port. Default is "
-            "8091. Must match the port in Stellarium's plugin settings.",
+            "8090. Must match the port in Stellarium's plugin settings "
+            "(Configuration > Plugins > Remote Control > Configure).",
         )
 
         st.subheader("Imaging Defaults")
@@ -132,7 +133,10 @@ def render_settings(config, alpaca=None, stellarium=None):
             try:
                 with open(config_path, "w") as f:
                     toml.dump(config_data, f)
-                st.success("Settings saved!")
+                # Drop cached Stellarium client so it picks up the new host/port
+                # on next rerun (app.py recreates it from config when missing).
+                st.session_state.pop("stellarium", None)
+                st.success("Settings saved! Stellarium will reconnect on next page load.")
             except Exception as e:
                 st.error(f"Failed to save: {e}")
 

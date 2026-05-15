@@ -164,8 +164,9 @@ def render_dashboard(alpaca, stellarium):
             st.info("No object selected in Stellarium. Click on something in the sky map.")
     else:
         st.warning(
-            "Stellarium Remote Control not available on port 8091. "
-            "Enable it in Stellarium: Configuration > Plugins > Remote Control."
+            f"Stellarium Remote Control not reachable at {stellarium.base_url}. "
+            "Enable it in Stellarium: Configuration > Plugins > Remote Control > "
+            "Configure → Start server. Adjust host/port in Settings if needed."
         )
 
     # Auto-refresh controls

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Stellarium
     stellarium_host: str = "localhost"
-    stellarium_port: int = 8091
+    stellarium_port: int = 8090
 
     # Observing site (lat/lon/elevation for astronomy + weather)
     site_latitude: float = 37.12

@@ -20,7 +20,7 @@ img_port = 7556                   # MJPEG live view stream port (bridge)
 
 [stellarium]
 host = "localhost"
-port = 8091
+port = 8090
 
 [ui]
 port = 8502

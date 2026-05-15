@@ -28,7 +28,7 @@ class StellariumObject:
 class StellariumClient:
     """Client for Stellarium Remote Control plugin."""
 
-    def __init__(self, host: str = "localhost", port: int = 8091, timeout: int = 5):
+    def __init__(self, host: str = "localhost", port: int = 8090, timeout: int = 5):
         self.base_url = f"http://{host}:{port}"
         self.timeout = timeout
         self.session = requests.Session()
