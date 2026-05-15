@@ -43,6 +43,11 @@ jobs:
       - name: Run portal tests
         env:
           PYTHONPATH: .
+          # AUTO_CONNECT=false prevents the FastAPI lifespan hook from attempting
+          # ALPACA TCP connect to the (unreachable) configured SEESTAR_IP on every
+          # TestClient instantiation. Without this, test_sessions_router.py adds
+          # ~50 minutes of pure TCP-retry timeout per CI run.
+          AUTO_CONNECT: "false"
         # Two tests deselected: cv2.imencode returns an empty tuple in the CI
         # runner (ubuntu-latest + opencv-python-headless) but works correctly in
         # the production Jetson container. Long-documented pre-existing failure
