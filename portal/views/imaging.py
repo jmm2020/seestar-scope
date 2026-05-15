@@ -1138,6 +1138,11 @@ def _render_preview_and_save(alpaca, config):
         else:
             st.success(f"Loop complete: {completed} frames captured")
             st.session_state["loop_completed"] = 0
+            # Auto-disarm the checkbox so the next Capture click is a one-shot,
+            # not a fresh N-frame cycle. del lets the widget re-initialize at
+            # its default (False) on next render — direct assignment to the
+            # widget key isn't allowed mid-script in Streamlit.
+            st.session_state.pop("loop_mode", None)
 
 
 # --- Main Page ---
