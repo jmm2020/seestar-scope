@@ -655,6 +655,11 @@ def _render_capture_controls(alpaca, exposure):
         if st.button("Capture", type="primary", use_container_width=True, key="btn_capture"):
             resp = alpaca.start_exposure(exposure, light=True)
             if resp.success:
+                # Invalidate any previously-captured frame so the new exposure
+                # downloads cleanly instead of re-showing the stale preview.
+                st.session_state.pop("last_image", None)
+                st.session_state.pop("enhanced_image", None)
+                st.session_state.pop("enhance_params_key", None)
                 st.session_state["exposing"] = True
                 st.session_state["exposure_start"] = time.time()
                 st.session_state["exposure_duration"] = exposure
@@ -1037,7 +1042,12 @@ def _render_comparison(original, enhanced):
 
 def _render_preview_and_save(alpaca, config):
     """Download image, show enhancement panel + comparison, and offer saves."""
-    if not st.session_state.get("image_ready"):
+    # Render whenever there's something to show: a fresh capture to download,
+    # OR a previously-downloaded image still in state. Returning when only
+    # image_ready is False would blank the preview on every widget change
+    # (preset switch, comparison-mode change, etc.) — Streamlit reruns the
+    # whole script on each interaction.
+    if not st.session_state.get("image_ready") and "last_image" not in st.session_state:
         return
 
     if "last_image" not in st.session_state:
