@@ -400,13 +400,13 @@ class AlpacaClient:
 
         Goes to the scope's :4701 guest channel directly; the bridge's
         method_sync path hangs 10s on firmware 7.34 for this method.
+
+        Returns the bare {"View": {...}} payload — same shape that
+        seestar_action() yields after its own envelope unwrap — so callers
+        can do view_data.get("View") uniformly across both paths.
         """
         try:
-            result = self.observer.get_view_state()
-            # seestar_action callers expect the seestar_alp envelope shape:
-            #     {"0": {"method": ..., "result": ...}}
-            # Wrap so existing view code (imaging.py) keeps working unchanged.
-            return {"0": {"method": "get_view_state", "result": result}}
+            return self.observer.get_view_state()
         except SeestarObserverError as exc:
             logger.warning(f"observer get_view_state failed, falling back to bridge: {exc}")
             return self.seestar_action("get_view_state")

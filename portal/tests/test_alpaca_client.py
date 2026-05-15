@@ -400,6 +400,30 @@ def test_get_view_state_returns_none_on_string_payload():
         assert client.get_view_state() is None
 
 
+def test_get_view_state_observer_path_returns_bare_view_shape():
+    """Observer-success path must return {"View": {...}} — the shape every
+    caller (imaging.py, dashboard.py, status_ws.py) parses with
+    view_data.get("View"). A spurious {"0": {...}} envelope wrapper would
+    silently make is_stacking always False and freeze the Stop button.
+    """
+    client = AlpacaClient()
+    raw = {
+        "View": {
+            "state": "working",
+            "mode": "star",
+            "stage": "Stack",
+            "Stack": {"count": 7},
+        }
+    }
+    stub_observer = MagicMock()
+    stub_observer.get_view_state.return_value = raw
+    client._observer = stub_observer
+    result = client.get_view_state()
+    assert isinstance(result, dict)
+    assert "View" in result, f"expected bare 'View' key at top level, got {list(result.keys())}"
+    assert result["View"]["stage"] == "Stack"
+
+
 # --- img_stream_* tests ---
 # The MJPEG live view used to be embedded with the docker network hostname
 # (seestar-alp:7556/1/vid) — browser couldn't resolve the hostname AND the
