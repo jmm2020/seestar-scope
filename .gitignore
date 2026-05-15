@@ -39,3 +39,4 @@ secrets/
 
 # Cloudflare tunnel credentials (commit config.yml template only)
 cloudflared/*.json
+tmp/

@@ -89,6 +89,7 @@ What's been applied (config edits live on Jetson):
 - ALPACA on scope ≠ ALPACA on seestar_alp — scope has its own at :32323 (Alpyca 1.2.0-3 fingerprint)
 - DeviceNumber is **0**, not 1 (ALPACA management API confirms)
 - Useful: `vendor/seestar_alp/` is a checkout but the Jetson container has a NEWER copy — line numbers may not match. When debugging, check inside container with `docker exec seestar-alp sed -n 'Np' /home/seestar/seestar_alp/device/seestar_device.py`
+- **Cloudflared tunnel `831e21c1-a274-4f14-8b29-b91097f96c92` is SHARED with the workstation UCIS-constellation tunnel.** Defined in `cloudflared/config.yml`. If the credentials are rotated on the workstation (or the tunnel is deleted/recreated there), seestar-scope's tunnel breaks silently — `seestar-cloudflared` will keep running but lose its route. Coordinate any rotation across both projects.
 
 ## What I should NEVER assume again
 
@@ -97,6 +98,7 @@ What's been applied (config edits live on Jetson):
 - Containers on this machine are UCIS, not seestar-scope
 - "Backend on :8503" means **Jetson .234**, not localhost
 - `vendor/seestar_alp/` source ≠ what's actually running on Jetson — diff before patching
+- **`deploy/jetson/setup.sh:96` writes `SEESTAR_PORT=11111`** instead of the correct `32323`. This is a real production bug — a fresh Jetson install via `bash deploy/jetson/setup.sh` will land with the wrong port, and the portal backend will silently fail to reach the scope. Either edit the generated `.env` manually after running setup, or fix `setup.sh` before running it. Tracked separately from the AI Layer reconciliation — needs its own commit.
 
 ## Open question for next session
 
