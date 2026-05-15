@@ -22,13 +22,23 @@ def alpaca_imagearray_to_image(image_data: list, color: bool = True) -> Optional
     if not image_data:
         return None
     arr = np.array(image_data, dtype=np.uint32)
+
+    def _norm_or_uniform(a: np.ndarray) -> np.ndarray:
+        # Without this guard, a fully-saturated daytime frame (all pixels
+        # at sensor ceiling) collapses to all-zero (black) because the
+        # /max(span,1) fallback yields 0/1 for every pixel.
+        span = int(a.max()) - int(a.min())
+        if span == 0:
+            fill = 255 if int(a.max()) >= 60000 else 128
+            return np.full(a.shape, fill, dtype=np.uint8)
+        return ((a - a.min()) / span * 255).astype(np.uint8)
+
     # Handle 2D mono
     if arr.ndim == 2:
-        arr = ((arr - arr.min()) / max(arr.max() - arr.min(), 1) * 255).astype(np.uint8)
-        return Image.fromarray(arr, mode="L")
+        return Image.fromarray(_norm_or_uniform(arr), mode="L")
     # Handle 3D color
     elif arr.ndim == 3:
-        arr = ((arr - arr.min()) / max(arr.max() - arr.min(), 1) * 255).astype(np.uint8)
+        arr = _norm_or_uniform(arr)
         if arr.shape[2] == 3:
             return Image.fromarray(arr, mode="RGB")
         elif arr.shape[0] == 3:
