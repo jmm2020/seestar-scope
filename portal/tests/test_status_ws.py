@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -238,17 +239,8 @@ def test_live_stack_endpoint_returns_current_state():
 # ---------------------------------------------------------------------------
 
 
-def _bridge_test_client():
-    class FakeState:
-        pass
-
-    return _make_endpoint_client(FakeState)
-
-
 def test_bridge_status_reachable():
     """Bridge reachable → returns configured devices list."""
-    import httpx
-
     fake_alpaca = MagicMock()
     fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
 
@@ -268,7 +260,7 @@ def test_bridge_status_reachable():
         patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
         patch.object(httpx, "AsyncClient", return_value=mock_http),
     ):
-        client = _bridge_test_client()
+        client = _make_endpoint_client(object)
         resp = client.get("/api/status/bridge")
 
     assert resp.status_code == 200
@@ -283,8 +275,6 @@ def test_bridge_status_reachable():
 
 def test_bridge_status_unreachable():
     """Bridge unreachable → returns bridge_reachable: false, not a 500."""
-    import httpx
-
     fake_alpaca = MagicMock()
     fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
 
@@ -297,7 +287,7 @@ def test_bridge_status_unreachable():
         patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
         patch.object(httpx, "AsyncClient", return_value=mock_http),
     ):
-        client = _bridge_test_client()
+        client = _make_endpoint_client(object)
         resp = client.get("/api/status/bridge")
 
     assert resp.status_code == 200
@@ -309,8 +299,6 @@ def test_bridge_status_unreachable():
 
 def test_bridge_status_bad_json_response():
     """Bridge TCP-reachable but returns non-JSON → bridge_reachable: false, not a 500."""
-    import httpx
-
     fake_alpaca = MagicMock()
     fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
 
@@ -327,7 +315,7 @@ def test_bridge_status_bad_json_response():
         patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
         patch.object(httpx, "AsyncClient", return_value=mock_http),
     ):
-        client = _bridge_test_client()
+        client = _make_endpoint_client(object)
         resp = client.get("/api/status/bridge")
 
     assert resp.status_code == 200
