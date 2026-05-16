@@ -61,6 +61,12 @@ http://<jetson-ip>:8502
 
 The portal is accessible from any device on the same LAN.
 
+## Optional: Stellarium Integration
+
+Stellarium GoTo/Sequence features require the Stellarium Remote Control plugin running at `STELLARIUM_HOST:STELLARIUM_PORT` (default: `localhost:8090`). Since the portal runs in Docker, `localhost` is the container — set `STELLARIUM_HOST=<workstation-ip>` in `.env` if Stellarium runs on your workstation.
+
+See [README.md — Optional: Stellarium Integration](../../README.md#optional-stellarium-integration) for full setup steps.
+
 ## Remote Access via Cloudflare Tunnel
 
 For deployments at remote sites, the compose file ships a `seestar-cloudflared`

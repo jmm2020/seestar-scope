@@ -78,3 +78,30 @@ See `docs/jetson_build_notes.md` for ARM64 dependency verification and `docker b
 
 When ready to cut over from workstation to Jetson, follow `docs/migration_runbook.md`
 (pre-flight checklist, `scripts/smoke_test.sh` validation, rollback procedure).
+
+## Optional: Stellarium Integration
+
+The portal integrates with [Stellarium](https://stellarium.org/) to let you click a target in its sky map and slew the telescope to it. Features appear in the Dashboard, GoTo, and Sequence views. Stellarium is **optional** — the portal works without it.
+
+### Enabling Remote Control in Stellarium
+
+1. Open Stellarium
+2. Go to **Configuration** (F2) → **Plugins** → **Remote Control**
+3. Click **Configure**, enable **Start server**, set port to `8090`
+4. Save settings and restart Stellarium (or toggle the plugin off/on)
+
+### Docker Networking
+
+In the Docker deployment, `localhost` inside the container does **not** reach the Jetson host or your workstation. If Stellarium runs on a different machine, set `STELLARIUM_HOST` in your `.env` file:
+
+```env
+STELLARIUM_HOST=192.168.0.36   # workstation IP where Stellarium runs
+STELLARIUM_PORT=8090
+```
+
+To verify the connection:
+```bash
+curl http://<stellarium-host>:8090/api/main/status
+```
+
+A JSON response confirms Remote Control is active.

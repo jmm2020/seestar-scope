@@ -165,8 +165,10 @@ def render_dashboard(alpaca, stellarium):
     else:
         st.warning(
             f"Stellarium Remote Control not reachable at {stellarium.base_url}. "
-            "Enable it in Stellarium: Configuration > Plugins > Remote Control > "
-            "Configure → Start server. Adjust host/port in Settings if needed."
+            "Enable it in Stellarium: Configuration → Plugins → Remote Control → "
+            "Configure → Start server. "
+            "If Stellarium runs on a different machine than the portal, set "
+            "STELLARIUM_HOST=<ip> in your .env file."
         )
 
     # Auto-refresh controls
