@@ -170,7 +170,8 @@ def _render_add_target(stellarium):
                 f"Stellarium Remote Control not reachable at {stellarium.base_url}. "
                 "Enable it in Stellarium: Configuration → Plugins → Remote Control → "
                 "Configure → Start server. "
-                "If Stellarium runs on a different machine, set STELLARIUM_HOST in .env."
+                "If Stellarium runs on a different machine, set STELLARIUM_HOST=<ip> in .env. "
+                "Adjust host/port under Settings → Stellarium."
             )
         else:
             if st.button("Get Stellarium Selection", key="seq_get_stellarium"):
