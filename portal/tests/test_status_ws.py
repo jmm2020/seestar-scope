@@ -265,7 +265,7 @@ def test_bridge_status_reachable():
     mock_http.__aexit__.return_value = None
 
     with (
-        patch("backend.clients.get_alpaca_client", return_value=fake_alpaca),
+        patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
         patch.object(httpx, "AsyncClient", return_value=mock_http),
     ):
         client = _bridge_test_client()
@@ -294,7 +294,7 @@ def test_bridge_status_unreachable():
     mock_http.__aexit__.return_value = None
 
     with (
-        patch("backend.clients.get_alpaca_client", return_value=fake_alpaca),
+        patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
         patch.object(httpx, "AsyncClient", return_value=mock_http),
     ):
         client = _bridge_test_client()
@@ -304,4 +304,33 @@ def test_bridge_status_unreachable():
     body = resp.json()
     assert body["bridge_reachable"] is False
     assert body["configured_devices"] == []
+    assert body["error"] == "refused"
+
+
+def test_bridge_status_bad_json_response():
+    """Bridge TCP-reachable but returns non-JSON → bridge_reachable: false, not a 500."""
+    import httpx
+
+    fake_alpaca = MagicMock()
+    fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.side_effect = ValueError("not valid JSON")
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(return_value=mock_response)
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with (
+        patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
+        patch.object(httpx, "AsyncClient", return_value=mock_http),
+    ):
+        client = _bridge_test_client()
+        resp = client.get("/api/status/bridge")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bridge_reachable"] is False
     assert "error" in body

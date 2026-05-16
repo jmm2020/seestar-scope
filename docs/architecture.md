@@ -87,7 +87,7 @@ The FastAPI backend (`seestar-portal-backend`, port `:8503`) handles all persist
 | `routers/platesolve.py` | Plate-solve REST endpoints — ASTAP integration |
 | `routers/sessions.py` | Sessions CRUD — 6 endpoints under `/api/sessions` (note: also registered at `main.py:102` with explicit prefix) |
 | `routers/conditions.py` | Observing conditions — `/api/conditions/current` + `/api/conditions/forecast` |
-| `routers/status_ws.py` | WebSocket status stream + `/api/status/connections` REST endpoint |
+| `routers/status_ws.py` | WebSocket status stream (`/api/status/ws`) + REST endpoints: `/connections`, `/live-stack`, `/bridge` (bridge health probe) |
 | `routers/telescope.py` | ALPACA passthrough to S50 native ALPACA at `:32323` — `/api/telescope/*` (telescope, camera, focuser, filter, dew-heater, Stellarium passthrough) |
 | `routers/stacking.py` | Stacking session pipeline — `POST /api/stacking/{start,add-frame,process,abort}`, `GET /api/stacking/{status,config}` |
 | `routers/processing.py` | Legacy Siril processing pipeline — `/api/processing/*`; imports `app/services/siril_service.py` |
@@ -275,14 +275,16 @@ After branch protection is enabled, direct pushes to `main` are blocked — all 
 
 ## Status Streaming (`portal/backend/routers/status_ws.py`)
 
-The FastAPI backend exposes a WebSocket status stream and a REST snapshot endpoint.
+The FastAPI backend exposes a WebSocket status stream, REST snapshot endpoints, and a bridge health probe.
 
 **Endpoints**:
 
 | Endpoint | Protocol | Purpose |
 |----------|----------|---------|
 | `/api/status/ws` | WebSocket | Real-time push — telescope, processing, stack progress |
+| `/api/status/connections` | HTTP GET | Active WebSocket client count |
 | `/api/status/live-stack` | HTTP GET | Last known stack state (for reconnect/page-load recovery) |
+| `/api/status/bridge` | HTTP GET | seestar_alp bridge reachability probe via `/management/v1/configureddevices` (no `ClientID` required); returns `bridge_reachable` + configured device list |
 
 **WebSocket Message Types** (`MessageType` enum):
 

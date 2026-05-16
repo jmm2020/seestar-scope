@@ -13,6 +13,9 @@ import logging
 from datetime import datetime, timezone
 from enum import Enum
 
+import httpx
+from backend.clients import get_alpaca_client
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/status", tags=["status"])
@@ -486,16 +489,14 @@ async def get_bridge_status():
     a telescope-only bridge by design — camera/focuser/filterwheel/switch are not
     registered and will 404 on direct ALPACA calls.
     """
-    import httpx
-    from backend.clients import get_alpaca_client
-
     client = get_alpaca_client()
-    alp_root = client.alp_base_url.removesuffix("/api/v1")
+    alp_root = client.alp_base_url.rsplit("/api/v1", 1)[0]
     mgmt_url = f"{alp_root}/management/v1/configureddevices"
 
     try:
         async with httpx.AsyncClient(timeout=3.0) as http:
             resp = await http.get(mgmt_url)
+        resp.raise_for_status()
         devices = resp.json().get("Value", [])
         return {
             "bridge_reachable": True,
@@ -503,9 +504,9 @@ async def get_bridge_status():
                 {"type": d["DeviceType"], "number": d["DeviceNumber"], "name": d["DeviceName"]}
                 for d in devices
             ],
-            "note": "camera/focuser/filterwheel/switch are not exposed — telescope only",
         }
     except Exception as exc:
+        logger.warning("bridge health probe failed (%s): %s", mgmt_url, exc)
         return {
             "bridge_reachable": False,
             "configured_devices": [],
