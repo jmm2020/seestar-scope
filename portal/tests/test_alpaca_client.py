@@ -280,6 +280,23 @@ def _mock_action_response(value, error_number=0, error_message=""):
     return mock_resp
 
 
+def test_get_device_state_uses_short_timeout():
+    """get_device_state() must pass timeout=5 to session.put, not the default 30s.
+
+    On firmware 7.34 the :4700 host channel is PEM-gated and silently drops
+    method_sync calls; the bridge hangs for its full configured timeout. A 5s
+    cap keeps the Dashboard from freezing for 30 seconds before showing its
+    degraded warning.
+    """
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response("Exceeded allotted wait time")
+        result = client.get_device_state()
+    assert result is None
+    assert mock_put.call_count == 1
+    assert mock_put.call_args.kwargs.get("timeout") == 5
+
+
 def test_seestar_action_returns_none_on_timeout_string():
     """When ALP times out it returns a plain-text error string in Value; we must
     return None, not pass the string through to callers that expect a dict."""
