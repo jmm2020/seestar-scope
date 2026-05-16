@@ -206,8 +206,10 @@ def _render_stellarium_panel(alpaca, stellarium):
     if not stellarium.is_available():
         st.warning(
             f"Stellarium Remote Control not reachable at {stellarium.base_url}. "
-            "Check Settings → Stellarium and confirm the plugin is enabled "
-            "(Configuration → Plugins → Remote Control → Configure → Start server)."
+            "Enable it in Stellarium: Configuration → Plugins → Remote Control → "
+            "Configure → Start server. "
+            "If Stellarium runs on a different machine, set STELLARIUM_HOST=<ip> in .env. "
+            "Adjust host/port under Settings → Stellarium."
         )
         return
 

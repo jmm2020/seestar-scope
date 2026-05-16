@@ -118,5 +118,6 @@ class StellariumClient:
                 rise=data.get("rise", ""),
                 set_time=data.get("set", ""),
             )
-        except (requests.exceptions.RequestException, ValueError):
+        except (requests.exceptions.RequestException, ValueError) as e:
+            logger.error(f"Stellarium lookup_object failed: {e}")
             return None

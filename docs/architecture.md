@@ -305,7 +305,7 @@ The Streamlit UI's live-stack panel (`views/imaging.py`) connects directly from 
 | 8502 | portal (Streamlit) | HTTP |
 | 8503 | portal backend (FastAPI) | HTTP REST + WebSocket |
 | 8504 | seestar-enhance | HTTP REST |
-| 8091 | Stellarium Remote Control | HTTP REST |
+| 8090 | Stellarium Remote Control (optional, external) | HTTP REST |
 | 32323 | Seestar S50 (native ALPACA) | HTTP REST |
 | 4701 | Seestar S50 (guest JSON-RPC) | TCP (JSON-RPC over raw socket) |
 | 80 | Seestar S50 (HTTP static file server) | HTTP — serves MyWorks/ album content |
