@@ -126,6 +126,7 @@ async def root():
             "stacking": "/api/stacking/*",
             "status_ws": "ws://<host>:8503/api/status/ws",
             "status_connections": "/api/status/connections",
+            "status_bridge": "/api/status/bridge",
             "docs": "/docs",
             "health": "/health",
         },

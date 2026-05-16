@@ -475,3 +475,39 @@ async def get_live_stack_state(request: Request):
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "state": state,
     }
+
+
+@router.get("/bridge")
+async def get_bridge_status():
+    """Check seestar_alp bridge connectivity via ALPACA management endpoint.
+
+    Uses /management/v1/configureddevices which requires no ALPACA ClientID params.
+    Returns bridge reachability and which device types are exposed. seestar_alp is
+    a telescope-only bridge by design — camera/focuser/filterwheel/switch are not
+    registered and will 404 on direct ALPACA calls.
+    """
+    import httpx
+    from backend.clients import get_alpaca_client
+
+    client = get_alpaca_client()
+    alp_root = client.alp_base_url.removesuffix("/api/v1")
+    mgmt_url = f"{alp_root}/management/v1/configureddevices"
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as http:
+            resp = await http.get(mgmt_url)
+        devices = resp.json().get("Value", [])
+        return {
+            "bridge_reachable": True,
+            "configured_devices": [
+                {"type": d["DeviceType"], "number": d["DeviceNumber"], "name": d["DeviceName"]}
+                for d in devices
+            ],
+            "note": "camera/focuser/filterwheel/switch are not exposed — telescope only",
+        }
+    except Exception as exc:
+        return {
+            "bridge_reachable": False,
+            "configured_devices": [],
+            "error": str(exc),
+        }

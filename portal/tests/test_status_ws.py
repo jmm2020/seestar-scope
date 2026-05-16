@@ -231,3 +231,77 @@ def test_live_stack_endpoint_returns_current_state():
     resp = client.get("/api/status/live-stack")
     assert resp.status_code == 200
     assert resp.json()["state"] == expected
+
+
+# ---------------------------------------------------------------------------
+# GET /api/status/bridge endpoint tests
+# ---------------------------------------------------------------------------
+
+
+def _bridge_test_client():
+    class FakeState:
+        pass
+
+    return _make_endpoint_client(FakeState)
+
+
+def test_bridge_status_reachable():
+    """Bridge reachable → returns configured devices list."""
+    import httpx
+
+    fake_alpaca = MagicMock()
+    fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "Value": [
+            {"DeviceType": "Telescope", "DeviceNumber": 0, "DeviceName": "Seestar S50"}
+        ]
+    }
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(return_value=mock_response)
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with (
+        patch("backend.clients.get_alpaca_client", return_value=fake_alpaca),
+        patch.object(httpx, "AsyncClient", return_value=mock_http),
+    ):
+        client = _bridge_test_client()
+        resp = client.get("/api/status/bridge")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bridge_reachable"] is True
+    assert body["configured_devices"][0]["type"] == "Telescope"
+    assert body["configured_devices"][0]["number"] == 0
+    mock_http.get.assert_awaited_once_with(
+        "http://192.168.0.132:5555/management/v1/configureddevices"
+    )
+
+
+def test_bridge_status_unreachable():
+    """Bridge unreachable → returns bridge_reachable: false, not a 500."""
+    import httpx
+
+    fake_alpaca = MagicMock()
+    fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with (
+        patch("backend.clients.get_alpaca_client", return_value=fake_alpaca),
+        patch.object(httpx, "AsyncClient", return_value=mock_http),
+    ):
+        client = _bridge_test_client()
+        resp = client.get("/api/status/bridge")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bridge_reachable"] is False
+    assert body["configured_devices"] == []
+    assert "error" in body
