@@ -280,6 +280,35 @@ def _mock_action_response(value, error_number=0, error_message=""):
     return mock_resp
 
 
+def test_get_device_state_uses_short_timeout():
+    """get_device_state() must pass timeout=5 to session.put, not the default 30s."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response("Exceeded allotted wait time")
+        result = client.get_device_state()
+    assert result is None
+    assert mock_put.call_count == 1
+    assert mock_put.call_args.kwargs.get("timeout") == 5
+
+
+def test_seestar_action_timeout_override_reaches_session_put():
+    """Explicit timeout arg must propagate to session.put, not be replaced by self.timeout."""
+    client = AlpacaClient()
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response({"status": "ok"})
+        client.seestar_action("some_method", timeout=10)
+    assert mock_put.call_args.kwargs.get("timeout") == 10
+
+
+def test_seestar_action_default_timeout_uses_client_timeout():
+    """When timeout is omitted, self.timeout must be used — not None or 0."""
+    client = AlpacaClient(timeout=30)
+    with patch.object(client.session, "put") as mock_put:
+        mock_put.return_value = _mock_action_response({"status": "ok"})
+        client.seestar_action("some_method")
+    assert mock_put.call_args.kwargs.get("timeout") == 30
+
+
 def test_seestar_action_returns_none_on_timeout_string():
     """When ALP times out it returns a plain-text error string in Value; we must
     return None, not pass the string through to callers that expect a dict."""

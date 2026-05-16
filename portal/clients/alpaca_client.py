@@ -251,11 +251,20 @@ class AlpacaClient:
 
     # --- Seestar Native (via action endpoint) ---
 
-    def seestar_action(self, method: str, params: dict = None, sync: bool = True) -> Optional[dict]:
+    def seestar_action(
+        self,
+        method: str,
+        params: dict = None,
+        sync: bool = True,
+        timeout: Optional[int] = None,
+    ) -> Optional[dict]:
         """Send a native Seestar JSON-RPC command via seestar_alp's action endpoint.
 
         Uses method_sync (waits for response) or method_async (fire-and-forget).
         Returns the parsed Value from the response, or None on error.
+
+        `timeout` overrides the client default for this call only. Use a short
+        override for methods that hang on firmware 7.34's PEM-gated :4700 channel.
         """
         payload = {"method": method}
         if params:
@@ -268,8 +277,9 @@ class AlpacaClient:
             "ClientID": str(self.client_id),
             "ClientTransactionID": str(self._next_transaction_id()),
         }
+        effective_timeout = timeout if timeout is not None else self.timeout
         try:
-            resp = self.session.put(url, data=form_data, timeout=self.timeout)
+            resp = self.session.put(url, data=form_data, timeout=effective_timeout)
             data = resp.json()
             if data.get("ErrorNumber", 0) != 0:
                 logger.warning(f"seestar_action({method}) error: {data.get('ErrorMessage')}")
@@ -297,6 +307,9 @@ class AlpacaClient:
             if isinstance(inner, dict) and "result" in inner:
                 return inner["result"]
             return value
+        except requests.exceptions.Timeout as e:
+            logger.warning(f"seestar_action({method}) timed out after {effective_timeout}s: {e}")
+            return None
         except requests.exceptions.RequestException as e:
             logger.error(f"seestar_action({method}) failed: {e}")
             return None
@@ -392,8 +405,14 @@ class AlpacaClient:
         )
 
     def get_device_state(self) -> Optional[dict]:
-        """Get native Seestar device state — battery, WiFi, storage, sensors, firmware, etc."""
-        return self.seestar_action("get_device_state")
+        """Get native Seestar device state — battery, WiFi, storage, sensors, firmware, etc.
+
+        Uses a short 5s timeout because `get_device_state` is not whitelisted
+        on the scope's :4701 guest channel and `:4700` is PEM-gated on firmware
+        7.34 — the bridge hangs until its own timeout. A short cap lets the
+        Dashboard show its degraded warning quickly instead of freezing the UI.
+        """
+        return self.seestar_action("get_device_state", timeout=5)
 
     def get_view_state(self) -> Optional[dict]:
         """Get current view state — mode (star/moon), stage, target name.
