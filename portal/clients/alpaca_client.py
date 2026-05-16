@@ -307,6 +307,9 @@ class AlpacaClient:
             if isinstance(inner, dict) and "result" in inner:
                 return inner["result"]
             return value
+        except requests.exceptions.Timeout as e:
+            logger.warning(f"seestar_action({method}) timed out after {effective_timeout}s: {e}")
+            return None
         except requests.exceptions.RequestException as e:
             logger.error(f"seestar_action({method}) failed: {e}")
             return None
