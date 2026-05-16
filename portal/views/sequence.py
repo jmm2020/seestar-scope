@@ -173,13 +173,12 @@ def _render_add_target(stellarium):
                 "If Stellarium runs on a different machine, set STELLARIUM_HOST=<ip> in .env. "
                 "Adjust host/port under Settings → Stellarium."
             )
-        else:
-            if st.button("Get Stellarium Selection", key="seq_get_stellarium"):
-                obj = stellarium.get_selected_object()
-                if obj:
-                    st.session_state["seq_stell_obj"] = obj
-                else:
-                    st.warning("No object selected in Stellarium. Click on something in the sky map.")
+        elif st.button("Get Stellarium Selection", key="seq_get_stellarium"):
+            obj = stellarium.get_selected_object()
+            if obj:
+                st.session_state["seq_stell_obj"] = obj
+            else:
+                st.warning("No object selected in Stellarium. Click on something in the sky map.")
 
         obj = st.session_state.get("seq_stell_obj")
         if obj:
