@@ -198,11 +198,11 @@ class Config:
 
     @property
     def stripe_watch_price_id(self) -> str | None:
-        return os.environ.get("STRIPE_WATCH_PRICE_ID")
+        return os.environ.get("STRIPE_WATCH_PRICE_ID") or None
 
     @property
     def stripe_control_price_id(self) -> str | None:
-        return os.environ.get("STRIPE_CONTROL_PRICE_ID")
+        return os.environ.get("STRIPE_CONTROL_PRICE_ID") or None
 
 
 def load_config(path: str | Path | None = None) -> Config:

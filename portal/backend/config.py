@@ -1,7 +1,9 @@
 """Backend configuration"""
 
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -38,13 +40,13 @@ class Settings(BaseSettings):
     siril_cli_path: str = "siril-cli"
 
     # Auth + Billing (Phase 5a)
-    supabase_url: str | None = None
-    supabase_anon_key: str | None = None
-    supabase_service_role_key: str | None = None
-    supabase_jwt_secret: str | None = None
-    stripe_secret_key: str | None = None
-    stripe_webhook_secret: str | None = None
-    stripe_watch_price_id: str | None = None
+    supabase_url: str | None = None                        # URL, not a secret
+    supabase_anon_key: SecretStr | None = None
+    supabase_service_role_key: SecretStr | None = None
+    supabase_jwt_secret: SecretStr | None = None
+    stripe_secret_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
+    stripe_watch_price_id: str | None = None               # price ID, not a secret
     stripe_control_price_id: str | None = None
 
     class Config:

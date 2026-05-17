@@ -125,7 +125,7 @@ so the FastAPI backend can query a single source of truth.
 5. Verify the backend loaded the new env vars:
    ```bash
    docker exec seestar-portal-backend python -c \
-     "from config import settings; print(bool(settings.supabase_url))"
+     "from backend.config import settings; print(bool(settings.supabase_url))"
    ```
    Expect `True`. Phase 5b–5e features will become reachable once their code lands.
 

@@ -235,6 +235,37 @@ def test_stripe_webhook_secret_returns_env_value(tmp_path, monkeypatch):
     assert cfg.stripe_webhook_secret == "whsec_abc123"
 
 
+@pytest.mark.parametrize(
+    "env_var,prop_name",
+    [
+        ("SUPABASE_URL", "supabase_url"),
+        ("SUPABASE_ANON_KEY", "supabase_anon_key"),
+        ("SUPABASE_SERVICE_ROLE_KEY", "supabase_service_role_key"),
+        ("SUPABASE_JWT_SECRET", "supabase_jwt_secret"),
+        ("STRIPE_SECRET_KEY", "stripe_secret_key"),
+        ("STRIPE_WEBHOOK_SECRET", "stripe_webhook_secret"),
+    ],
+)
+def test_required_var_raises_on_empty_string(tmp_path, monkeypatch, env_var, prop_name):
+    monkeypatch.setenv(env_var, "")
+    cfg = load_config(tmp_path / "nonexistent.toml")
+    with pytest.raises(ValueError, match=env_var):
+        _ = getattr(cfg, prop_name)
+
+
+@pytest.mark.parametrize(
+    "env_var,prop_name",
+    [
+        ("STRIPE_WATCH_PRICE_ID", "stripe_watch_price_id"),
+        ("STRIPE_CONTROL_PRICE_ID", "stripe_control_price_id"),
+    ],
+)
+def test_optional_price_id_returns_none_on_empty_string(tmp_path, monkeypatch, env_var, prop_name):
+    monkeypatch.setenv(env_var, "")
+    cfg = load_config(tmp_path / "nonexistent.toml")
+    assert getattr(cfg, prop_name) is None
+
+
 def test_stripe_watch_price_id_returns_none_when_missing(tmp_path, monkeypatch):
     monkeypatch.delenv("STRIPE_WATCH_PRICE_ID", raising=False)
     cfg = load_config(tmp_path / "nonexistent.toml")
