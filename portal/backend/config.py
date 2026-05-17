@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     # Siril
     siril_cli_path: str = "siril-cli"
 
+    # Auth + Billing (Phase 5a)
+    supabase_url: str | None = None
+    supabase_anon_key: str | None = None
+    supabase_service_role_key: str | None = None
+    supabase_jwt_secret: str | None = None
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_watch_price_id: str | None = None
+    stripe_control_price_id: str | None = None
+
     class Config:
         env_file = ".env"
 

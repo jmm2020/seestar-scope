@@ -141,6 +141,69 @@ class Config:
     def site_name(self) -> str:
         return os.environ.get("SITE_NAME", self.site.get("name", "My Observatory"))
 
+    # Auth + Billing (Phase 5a — Supabase + Stripe).
+    # Required secrets raise ValueError on access if unset; optional price IDs return None.
+
+    @property
+    def supabase_url(self) -> str:
+        val = os.environ.get("SUPABASE_URL")
+        if not val:
+            raise ValueError("SUPABASE_URL is required but not set. Add it to your .env file.")
+        return val
+
+    @property
+    def supabase_anon_key(self) -> str:
+        val = os.environ.get("SUPABASE_ANON_KEY")
+        if not val:
+            raise ValueError(
+                "SUPABASE_ANON_KEY is required but not set. Add it to your .env file."
+            )
+        return val
+
+    @property
+    def supabase_service_role_key(self) -> str:
+        val = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if not val:
+            raise ValueError(
+                "SUPABASE_SERVICE_ROLE_KEY is required but not set. Add it to your .env file."
+            )
+        return val
+
+    @property
+    def supabase_jwt_secret(self) -> str:
+        val = os.environ.get("SUPABASE_JWT_SECRET")
+        if not val:
+            raise ValueError(
+                "SUPABASE_JWT_SECRET is required but not set. Add it to your .env file."
+            )
+        return val
+
+    @property
+    def stripe_secret_key(self) -> str:
+        val = os.environ.get("STRIPE_SECRET_KEY")
+        if not val:
+            raise ValueError(
+                "STRIPE_SECRET_KEY is required but not set. Add it to your .env file."
+            )
+        return val
+
+    @property
+    def stripe_webhook_secret(self) -> str:
+        val = os.environ.get("STRIPE_WEBHOOK_SECRET")
+        if not val:
+            raise ValueError(
+                "STRIPE_WEBHOOK_SECRET is required but not set. Add it to your .env file."
+            )
+        return val
+
+    @property
+    def stripe_watch_price_id(self) -> str | None:
+        return os.environ.get("STRIPE_WATCH_PRICE_ID")
+
+    @property
+    def stripe_control_price_id(self) -> str | None:
+        return os.environ.get("STRIPE_CONTROL_PRICE_ID")
+
 
 def load_config(path: str | Path | None = None) -> Config:
     """Load configuration from TOML file.
