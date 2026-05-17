@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -231,3 +232,93 @@ def test_live_stack_endpoint_returns_current_state():
     resp = client.get("/api/status/live-stack")
     assert resp.status_code == 200
     assert resp.json()["state"] == expected
+
+
+# ---------------------------------------------------------------------------
+# GET /api/status/bridge endpoint tests
+# ---------------------------------------------------------------------------
+
+
+def test_bridge_status_reachable():
+    """Bridge reachable → returns configured devices list."""
+    fake_alpaca = MagicMock()
+    fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "Value": [
+            {"DeviceType": "Telescope", "DeviceNumber": 0, "DeviceName": "Seestar S50"}
+        ]
+    }
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(return_value=mock_response)
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with (
+        patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
+        patch.object(httpx, "AsyncClient", return_value=mock_http),
+    ):
+        client = _make_endpoint_client(object)
+        resp = client.get("/api/status/bridge")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bridge_reachable"] is True
+    assert body["configured_devices"][0]["type"] == "Telescope"
+    assert body["configured_devices"][0]["number"] == 0
+    mock_http.get.assert_awaited_once_with(
+        "http://192.168.0.132:5555/management/v1/configureddevices"
+    )
+
+
+def test_bridge_status_unreachable():
+    """Bridge unreachable → returns bridge_reachable: false, not a 500."""
+    fake_alpaca = MagicMock()
+    fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with (
+        patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
+        patch.object(httpx, "AsyncClient", return_value=mock_http),
+    ):
+        client = _make_endpoint_client(object)
+        resp = client.get("/api/status/bridge")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bridge_reachable"] is False
+    assert body["configured_devices"] == []
+    assert body["error"] == "refused"
+
+
+def test_bridge_status_bad_json_response():
+    """Bridge TCP-reachable but returns non-JSON → bridge_reachable: false, not a 500."""
+    fake_alpaca = MagicMock()
+    fake_alpaca.alp_base_url = "http://192.168.0.132:5555/api/v1"
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.side_effect = ValueError("not valid JSON")
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(return_value=mock_response)
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with (
+        patch("backend.routers.status_ws.get_alpaca_client", return_value=fake_alpaca),
+        patch.object(httpx, "AsyncClient", return_value=mock_http),
+    ):
+        client = _make_endpoint_client(object)
+        resp = client.get("/api/status/bridge")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bridge_reachable"] is False
+    assert "error" in body
