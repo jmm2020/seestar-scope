@@ -477,36 +477,38 @@ nodes:
     trigger_rule: all_done
 
   # ---------------------------------------------------------------------------
-  # Phase 4 — optional GitHub posting. Inline env gate (no separate gate node).
+  # Phase 4 — GitHub posting. Defaults: post on (POST_GH_COMMENT=1).
+  # Caller decides the target each dispatch:
+  #   GH_ISSUE_NUMBER=<n> → comment on that issue
+  #   GH_ISSUE_NUMBER unset or empty → create a new dated issue
+  #   POST_GH_COMMENT=0 → skip posting entirely
   # ---------------------------------------------------------------------------
   - id: post-summary
-    model: haiku
-    allowed_tools: [Read, Bash]
-    prompt: |
-      Post the feature-walkthrough markdown report to GitHub — but ONLY if
-      `POST_GH_COMMENT=1` is set in env. Otherwise print "POST_GH_COMMENT not
-      set — skipping" and stop.
+    bash: |
+      set +e
+      MD_FILE="$ARTIFACTS_DIR/feature-walkthrough.md"
+      POST="${POST_GH_COMMENT:-1}"
+      ISSUE="${GH_ISSUE_NUMBER:-}"
 
-      Read the env var first:
-      ```bash
-      if [ "${POST_GH_COMMENT:-0}" != "1" ]; then
-        echo "POST_GH_COMMENT not set — skipping post-summary"
+      if [ "$POST" != "1" ]; then
+        echo "POST_GH_COMMENT=$POST — explicitly disabled, skipping post-summary"
         exit 0
       fi
-      ```
 
-      If posting:
-      Read `$ARTIFACTS_DIR/feature-walkthrough.md`.
+      if [ ! -f "$MD_FILE" ]; then
+        echo "ERROR: $MD_FILE not found — synthesize-report must have failed"
+        exit 1
+      fi
 
-      Two modes:
-      - If `GH_ISSUE_NUMBER` is set, comment on that issue:
-          `gh issue comment $GH_ISSUE_NUMBER --repo jmm2020/seestar-scope --body-file $ARTIFACTS_DIR/feature-walkthrough.md`
-      - Otherwise, open a new issue:
-          `gh issue create --repo jmm2020/seestar-scope \
-             --title "Feature walkthrough — $(date -I)" \
-             --body-file $ARTIFACTS_DIR/feature-walkthrough.md`
-
-      Print the resulting URL (or the skip message).
-    denied_tools: [Edit, Write]
+      if [ -n "$ISSUE" ]; then
+        echo "Commenting on issue #$ISSUE..."
+        gh issue comment "$ISSUE" --repo jmm2020/seestar-scope --body-file "$MD_FILE"
+      else
+        echo "Creating new dated issue..."
+        gh issue create --repo jmm2020/seestar-scope \
+          --title "Feature walkthrough — $(date -I)" \
+          --body-file "$MD_FILE"
+      fi
     depends_on: [synthesize-report]
     trigger_rule: all_done
+    timeout: 30000
