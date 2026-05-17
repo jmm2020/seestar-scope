@@ -10,6 +10,14 @@ from typing import Any
 DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.toml"
 
 
+def _require_env(var: str) -> str:
+    """Return the value of a required environment variable, raising if unset or empty."""
+    val = os.environ.get(var)
+    if not val:
+        raise ValueError(f"{var} is required but not set. Add it to your .env file.")
+    return val
+
+
 class Config:
     """Configuration wrapper with dot-access and defaults."""
 
@@ -54,28 +62,20 @@ class Config:
 
     @property
     def seestar_alp_host(self) -> str:
-        return os.environ.get(
-            "ALP_HOST",
-            os.environ.get("SEESTAR_ALP_HOST", self.seestar.get("alp_host", "localhost")),
-        )
+        toml_default = self.seestar.get("alp_host", "localhost")
+        return os.environ.get("ALP_HOST") or os.environ.get("SEESTAR_ALP_HOST") or toml_default
 
     @property
     def seestar_alp_port(self) -> int:
-        return int(
-            os.environ.get(
-                "ALP_PORT",
-                os.environ.get("SEESTAR_ALP_PORT", self.seestar.get("alp_port", 5555)),
-            )
-        )
+        toml_default = self.seestar.get("alp_port", 5555)
+        raw = os.environ.get("ALP_PORT") or os.environ.get("SEESTAR_ALP_PORT") or toml_default
+        return int(raw)
 
     @property
     def seestar_img_port(self) -> int:
-        return int(
-            os.environ.get(
-                "ALP_IMG_PORT",
-                os.environ.get("SEESTAR_IMG_PORT", self.seestar.get("img_port", 7556)),
-            )
-        )
+        toml_default = self.seestar.get("img_port", 7556)
+        raw = os.environ.get("ALP_IMG_PORT") or os.environ.get("SEESTAR_IMG_PORT") or toml_default
+        return int(raw)
 
     @property
     def stellarium_host(self) -> str:
@@ -146,55 +146,27 @@ class Config:
 
     @property
     def supabase_url(self) -> str:
-        val = os.environ.get("SUPABASE_URL")
-        if not val:
-            raise ValueError("SUPABASE_URL is required but not set. Add it to your .env file.")
-        return val
+        return _require_env("SUPABASE_URL")
 
     @property
     def supabase_anon_key(self) -> str:
-        val = os.environ.get("SUPABASE_ANON_KEY")
-        if not val:
-            raise ValueError(
-                "SUPABASE_ANON_KEY is required but not set. Add it to your .env file."
-            )
-        return val
+        return _require_env("SUPABASE_ANON_KEY")
 
     @property
     def supabase_service_role_key(self) -> str:
-        val = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-        if not val:
-            raise ValueError(
-                "SUPABASE_SERVICE_ROLE_KEY is required but not set. Add it to your .env file."
-            )
-        return val
+        return _require_env("SUPABASE_SERVICE_ROLE_KEY")
 
     @property
     def supabase_jwt_secret(self) -> str:
-        val = os.environ.get("SUPABASE_JWT_SECRET")
-        if not val:
-            raise ValueError(
-                "SUPABASE_JWT_SECRET is required but not set. Add it to your .env file."
-            )
-        return val
+        return _require_env("SUPABASE_JWT_SECRET")
 
     @property
     def stripe_secret_key(self) -> str:
-        val = os.environ.get("STRIPE_SECRET_KEY")
-        if not val:
-            raise ValueError(
-                "STRIPE_SECRET_KEY is required but not set. Add it to your .env file."
-            )
-        return val
+        return _require_env("STRIPE_SECRET_KEY")
 
     @property
     def stripe_webhook_secret(self) -> str:
-        val = os.environ.get("STRIPE_WEBHOOK_SECRET")
-        if not val:
-            raise ValueError(
-                "STRIPE_WEBHOOK_SECRET is required but not set. Add it to your .env file."
-            )
-        return val
+        return _require_env("STRIPE_WEBHOOK_SECRET")
 
     @property
     def stripe_watch_price_id(self) -> str | None:
