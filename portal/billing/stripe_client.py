@@ -78,7 +78,7 @@ class StripeClient:
         if s is None:
             return None
         try:
-            params: dict = {
+            params = {
                 "mode": "subscription",
                 "line_items": [{"price": price_id, "quantity": 1}],
                 "customer": customer_id,

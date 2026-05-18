@@ -162,6 +162,3 @@ def _render_account_panel() -> None:
     with col_b:
         if st.button("Manage Billing"):
             st.switch_page("pages/checkout.py")
-
-    if st.button("Subscribe / Manage Subscription", use_container_width=True):
-        st.switch_page("pages/checkout.py")
