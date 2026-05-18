@@ -11,8 +11,17 @@ SQL migration (run once in Supabase SQL editor):
         processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
-NOTE: Do NOT create indexes on stripe_event_log beyond the PK — the table
-will remain small (one row per webhook event) and a PK index is sufficient.
+NOTE: Do NOT create extra indexes on stripe_event_log — the only access
+pattern is a point-lookup by event_id (PK), so the PK index is sufficient.
+The table grows with each received Stripe event; a periodic cleanup of
+rows older than 30 days is safe if it becomes large.
+
+IMPORTANT: All event handlers must be idempotent. The check-then-insert
+dedup logic is not atomic; concurrent Stripe retries may call the same
+handler twice. The current checkout.session.completed handler is idempotent
+(same customer_id written to the same user_id). Future handlers for
+non-idempotent operations (e.g., refunds, downgrades) require atomic dedup
+via a Supabase RPC with INSERT ... ON CONFLICT DO NOTHING.
 """
 
 import logging
@@ -42,10 +51,17 @@ except ImportError:
     create_client = None  # type: ignore[assignment]
 
 
+_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+if not _WEBHOOK_SECRET:
+    logger.warning(
+        "STRIPE_WEBHOOK_SECRET not set — webhook endpoint will reject all events"
+    )
+
 _supabase: Optional["SupabaseClient"] = None
 
 
 def _get_supabase() -> Optional["SupabaseClient"]:
+    """Return a cached Supabase client, or None if unavailable/unconfigured."""
     global _supabase
     if _supabase is not None:
         return _supabase
@@ -112,14 +128,12 @@ def _handle_checkout_completed(session_obj: dict) -> None:
     sb = _get_supabase()
     if sb is None:
         return
-    try:
-        sb.auth.admin.update_user_by_id(
-            user_id,
-            {"user_metadata": {"stripe_customer_id": customer_id}},
-        )
-        logger.info("Bound customer %s → user %s", customer_id, user_id)
-    except Exception as e:
-        logger.error("Failed to bind customer_id to user_id: %s", e, exc_info=True)
+    # Let exceptions propagate so stripe_webhook returns 500 and Stripe retries.
+    sb.auth.admin.update_user_by_id(
+        user_id,
+        {"user_metadata": {"stripe_customer_id": customer_id}},
+    )
+    logger.info("Bound customer %s → user %s", customer_id, user_id)
 
 
 @router.post("/webhook", status_code=204)
@@ -132,12 +146,14 @@ async def stripe_webhook(request: Request):
     if not _STRIPE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Stripe not available")
 
+    if not _WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook secret not configured")
+
     body = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
-    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
     try:
-        event = _stripe_module.Webhook.construct_event(body, sig_header, webhook_secret)
+        event = _stripe_module.Webhook.construct_event(body, sig_header, _WEBHOOK_SECRET)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payload")
     except _stripe_module.error.SignatureVerificationError:
@@ -150,8 +166,7 @@ async def stripe_webhook(request: Request):
         logger.debug("Skipping duplicate event %s", event_id)
         return
 
-    _log_event(event_id, event_type)
-
+    # Dispatch BEFORE logging so a handler failure lets Stripe retry.
     if event_type == "checkout.session.completed":
         _handle_checkout_completed(event["data"]["object"])
     elif event_type == "invoice.payment_failed":
@@ -159,3 +174,6 @@ async def stripe_webhook(request: Request):
         logger.warning("Payment failed for invoice %s", invoice_id)
     else:
         logger.debug("Unhandled event type: %s", event_type)
+
+    # Only log as processed after handler completes successfully.
+    _log_event(event_id, event_type)

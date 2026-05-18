@@ -1,9 +1,12 @@
 """Stripe SDK wrapper.
 
 Exposes three public methods:
-  create_checkout_session(user_id, price_id, customer_id, trial_days=None) -> str | None
-  create_customer_portal_session(customer_id, return_url) -> str | None
   get_or_create_customer(user_id, email) -> str | None
+  create_checkout_session(
+      user_id, price_id, customer_id, success_url, cancel_url,
+      trial_days=None,
+  ) -> str | None
+  create_customer_portal_session(customer_id, return_url) -> str | None
 
 All network/auth failures are caught and logged; callers receive None on failure.
 """

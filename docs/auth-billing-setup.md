@@ -63,12 +63,13 @@
 4. **Capture the API key**:
    - **Developers → API keys**
    - Reveal the **Secret key** (`sk_test_...`) → `STRIPE_SECRET_KEY`
-5. **Configure the webhook endpoint** (Phase 5c implements the handler; just register the URL):
+5. **Configure the webhook endpoint**:
    - **Developers → Webhooks → Add endpoint**
-   - Endpoint URL: `https://<jetson-public-hostname>/api/webhooks/stripe`
-     (placeholder OK until Phase 5c lands)
+   - Endpoint URL: `https://<jetson-public-hostname>/billing/webhook`
    - Events to listen for: `customer.subscription.*`, `invoice.*`, `checkout.session.completed`
    - Save and reveal the **Signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`
+   - Stripe expects a **204** response on success — the handler returns 204 for both new and
+     already-processed (deduplicated) events.
 
 ---
 
@@ -129,6 +130,25 @@ so the FastAPI backend can query a single source of truth.
      "from backend.config import settings; print(bool(settings.supabase_url))"
    ```
    Expect `True`. Phase 5b–5e features will become reachable once their code lands.
+
+---
+
+## 5. One-time DDL — stripe_event_log
+
+The webhook handler deduplicates Stripe events using a `stripe_event_log` table.
+Run this once in the **Supabase SQL editor** (Dashboard → SQL Editor → New query):
+
+```sql
+CREATE TABLE IF NOT EXISTS public.stripe_event_log (
+    event_id     TEXT PRIMARY KEY,
+    type         TEXT NOT NULL,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+> **Note**: No extra indexes are needed — the PK covers all dedup lookups.
+> If this table doesn't exist when the first event fires, the handler falls back
+> to `_event_already_processed() = False`, allowing double-processing on replays.
 
 ---
 
