@@ -31,6 +31,7 @@ from backend.database import (
     init_sessions_database,
     close_sessions_database,
 )
+from billing import webhook_handler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ app.include_router(conditions.router)  # prefix="/api/conditions" defined in rou
 app.include_router(stacking.router)  # prefix="/api/stacking" defined in router
 app.include_router(imager.router)  # prefix="/api/imager" defined in router
 app.include_router(status_ws.router)  # WebSocket: live telescope status stream
+app.include_router(webhook_handler.router)  # POST /billing/webhook
 
 
 @app.get("/")
@@ -127,6 +129,7 @@ async def root():
             "status_ws": "ws://<host>:8503/api/status/ws",
             "status_connections": "/api/status/connections",
             "status_bridge": "/api/status/bridge",
+            "billing_webhook": "/billing/webhook",
             "docs": "/docs",
             "health": "/health",
         },
