@@ -53,6 +53,11 @@ def _build_oauth_url(provider_name: str) -> Optional[str]:
     return _provider.sign_in_oauth(provider_name, redirect_to=callback)
 
 
+def _switch_auth_view(view: str) -> None:
+    st.session_state["auth_view"] = view
+    st.rerun()
+
+
 def _render_auth_forms() -> None:
     view = st.session_state.get("auth_view", "login")
 
@@ -84,12 +89,10 @@ def _render_login_form() -> None:
     col_a, col_b = st.columns(2)
     with col_a:
         if st.button("Don't have an account? Sign up"):
-            st.session_state["auth_view"] = "signup"
-            st.rerun()
+            _switch_auth_view("signup")
     with col_b:
         if st.button("Forgot password?"):
-            st.session_state["auth_view"] = "reset"
-            st.rerun()
+            _switch_auth_view("reset")
 
 
 def _render_signup_form() -> None:
@@ -107,8 +110,7 @@ def _render_signup_form() -> None:
                 st.info("Check your inbox to confirm your email, then log in.")
 
     if st.button("Already have an account? Log in"):
-        st.session_state["auth_view"] = "login"
-        st.rerun()
+        _switch_auth_view("login")
 
 
 def _render_reset_form() -> None:
@@ -124,8 +126,7 @@ def _render_reset_form() -> None:
                 st.error("Could not send reset email. Please try again later.")
 
     if st.button("Back to login"):
-        st.session_state["auth_view"] = "login"
-        st.rerun()
+        _switch_auth_view("login")
 
 
 def _render_oauth_buttons() -> None:

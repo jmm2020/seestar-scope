@@ -16,6 +16,17 @@ if "streamlit" not in sys.modules:
     _st_stub.session_state = {}
     sys.modules["streamlit"] = _st_stub
 
+def _make_col_mocks():
+    """Return a (col_a, col_b) pair of context-manager-compatible mocks."""
+    col_a = MagicMock()
+    col_a.__enter__ = MagicMock(return_value=col_a)
+    col_a.__exit__ = MagicMock(return_value=False)
+    col_b = MagicMock()
+    col_b.__enter__ = MagicMock(return_value=col_b)
+    col_b.__exit__ = MagicMock(return_value=False)
+    return col_a, col_b
+
+
 def _load_account_module():
     import pages.account as _mod
     return _mod
@@ -68,13 +79,7 @@ def test_render_account_skips_code_exchange_when_already_authed(
     st_mock.query_params.get.return_value = "auth-code-xyz"
     mock_session_mod.is_authenticated.return_value = True
     # _render_account_panel unpacks st.columns(2) — must return a 2-tuple
-    col_a_mock = MagicMock()
-    col_a_mock.__enter__ = MagicMock(return_value=col_a_mock)
-    col_a_mock.__exit__ = MagicMock(return_value=False)
-    col_b_mock = MagicMock()
-    col_b_mock.__enter__ = MagicMock(return_value=col_b_mock)
-    col_b_mock.__exit__ = MagicMock(return_value=False)
-    st_mock.columns.return_value = (col_a_mock, col_b_mock)
+    st_mock.columns.return_value = _make_col_mocks()
 
     with um.patch.object(account_module, "st", st_mock):
         account_module.render_account()
@@ -102,13 +107,8 @@ def test_render_account_panel_logout_calls_sign_out_and_clears(
     account_module, mock_provider, mock_session_mod
 ):
     st_mock = MagicMock()
-    col_a_mock = MagicMock()
-    col_a_mock.__enter__ = MagicMock(return_value=col_a_mock)
-    col_a_mock.__exit__ = MagicMock(return_value=False)
+    col_a_mock, col_b_mock = _make_col_mocks()
     col_a_mock.button.return_value = True
-    col_b_mock = MagicMock()
-    col_b_mock.__enter__ = MagicMock(return_value=col_b_mock)
-    col_b_mock.__exit__ = MagicMock(return_value=False)
     st_mock.columns.return_value = (col_a_mock, col_b_mock)
 
     fake_sess = MagicMock()
