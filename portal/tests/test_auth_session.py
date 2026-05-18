@@ -79,3 +79,14 @@ def test_current_user_email_extracts_correctly():
 
 def test_current_user_id_returns_none_when_unauthed():
     assert auth_session.current_user_id() is None
+
+
+def test_current_user_created_at_extracts_correctly():
+    sess = _make_session()
+    sess.user.created_at = "2024-01-15T00:00:00Z"
+    auth_session.store_session(sess)
+    assert auth_session.current_user_created_at() == "2024-01-15T00:00:00Z"
+
+
+def test_current_user_created_at_returns_none_when_unauthed():
+    assert auth_session.current_user_created_at() is None

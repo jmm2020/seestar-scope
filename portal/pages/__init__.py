@@ -1,1 +1,1 @@
-"""Page-level views (auth, billing, account)."""
+"""Account and auth page views."""

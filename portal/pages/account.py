@@ -6,13 +6,17 @@ Renders one of three states:
   3. Unauthenticated — show login/signup form + OAuth buttons.
 """
 
+import logging
 import os
+from typing import Optional
 
 import streamlit as st
 
 from auth import session as auth_session
 from auth.provider import AuthProvider
 from auth.providers_config import get_oauth_providers
+
+logger = logging.getLogger(__name__)
 
 _PORTAL_URL = os.environ.get("PORTAL_URL", "http://localhost:8502")
 
@@ -44,10 +48,9 @@ def render_account() -> None:
     _render_auth_forms()
 
 
-def _build_oauth_url(provider_name: str) -> str:
-    callback = f"{_PORTAL_URL}/?page=Account"
-    url = _provider.sign_in_oauth(provider_name, redirect_to=callback)
-    return url or "#"
+def _build_oauth_url(provider_name: str) -> Optional[str]:
+    callback = f"{_PORTAL_URL}/"
+    return _provider.sign_in_oauth(provider_name, redirect_to=callback)
 
 
 def _render_auth_forms() -> None:
@@ -131,8 +134,12 @@ def _render_oauth_buttons() -> None:
         return
     st.caption("Or continue with:")
     for p in providers:
+        url = _build_oauth_url(p.name)
+        if not url:
+            logger.warning("OAuth URL unavailable for provider %s — button suppressed", p.name)
+            continue
         label = f"{p.icon} {p.label}".strip()
-        st.link_button(label, _build_oauth_url(p.name), use_container_width=True)
+        st.link_button(label, url, use_container_width=True)
 
 
 def _render_account_panel() -> None:
@@ -144,9 +151,11 @@ def _render_account_panel() -> None:
     with col_a:
         if st.button("Log Out", type="primary"):
             sess = auth_session.get_session()
-            access_token = getattr(sess, "access_token", "") if sess else ""
-            if access_token:
-                _provider.sign_out(access_token)
+            if sess:
+                access_token = getattr(sess, "access_token", "")
+                refresh_token = getattr(sess, "refresh_token", "")
+                if access_token:
+                    _provider.sign_out(access_token, refresh_token)
             auth_session.clear_session()
             st.rerun()
     with col_b:

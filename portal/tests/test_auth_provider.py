@@ -86,10 +86,17 @@ def test_exchange_code_returns_none_on_exception(provider):
 
 def test_sign_out_returns_true_on_success(provider):
     assert provider.sign_out("tok") is True
+    provider._client.auth.set_session.assert_called_once_with("tok", "")
+    provider._client.auth.sign_out.assert_called_once()
+
+
+def test_sign_out_with_refresh_token_passes_token(provider):
+    assert provider.sign_out("tok", "ref") is True
+    provider._client.auth.set_session.assert_called_once_with("tok", "ref")
 
 
 def test_sign_out_returns_false_on_exception(provider):
-    provider._client.auth.admin.sign_out.side_effect = Exception("signout error")
+    provider._client.auth.set_session.side_effect = Exception("signout error")
     assert provider.sign_out("tok") is False
 
 
@@ -98,8 +105,33 @@ def test_reset_password_email_returns_true_on_success(provider):
     provider._client.auth.reset_password_email.assert_called_once_with("u@t.com")
 
 
+def test_reset_password_email_returns_false_on_exception(provider):
+    provider._client.auth.reset_password_email.side_effect = Exception("smtp error")
+    assert provider.reset_password_email("u@t.com") is False
+
+
 def test_get_client_returns_none_when_url_missing(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
     p = AuthProvider(supabase_url="", anon_key="")
+    assert p._get_client() is None
+
+
+def test_get_client_calls_create_client_with_url_and_key(monkeypatch):
+    mock_factory = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr("auth.provider.create_client", mock_factory)
+    monkeypatch.setattr("auth.provider._SUPABASE_AVAILABLE", True)
+
+    p = AuthProvider(supabase_url="https://x.supabase.co", anon_key="anon-key")
+    client = p._get_client()
+
+    mock_factory.assert_called_once_with("https://x.supabase.co", "anon-key")
+    assert client is mock_factory.return_value
+
+
+def test_get_client_returns_none_when_create_client_raises(monkeypatch):
+    monkeypatch.setattr("auth.provider.create_client", MagicMock(side_effect=ValueError("bad url")))
+    monkeypatch.setattr("auth.provider._SUPABASE_AVAILABLE", True)
+
+    p = AuthProvider(supabase_url="https://x.supabase.co", anon_key="anon-key")
     assert p._get_client() is None

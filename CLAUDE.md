@@ -33,6 +33,7 @@ docs/                    ← architecture.md, migration_runbook.md
 4. The S50 has **two ALPACA endpoints**: native firmware on `:32323` (works, no auth) and the seestar_alp bridge on `:5555` (works but degraded — JSON-RPC `:4700` is PEM-gated on firmware 7.34). Don't conflate them.
 5. DeviceNumber is **0**, not 1.
 6. **CORS is `allow_origins=["*"]`** with a `# TODO` at `portal/backend/main.py:90` to lock it down. The Cloudflare tunnel exposes :8503 to the internet — so this is currently a wide-open API surface. **Do NOT add new untrusted endpoints behind this CORS** without restricting origins first.
+7. The **Streamlit auth gate** (PR #66) only protects the Streamlit UI at `:8502`. The FastAPI backend at `:8503` has **no equivalent guard** — CORS is still `allow_origins=["*"]` and all API endpoints are publicly reachable. Do not assume auth is "done" for the whole stack.
 
 ---
 
@@ -120,6 +121,8 @@ When debugging the scope panels, the failure mode is **silent**: `:4700` drops m
 - **`portal/backend/`** (FastAPI) — REST + WebSocket. Routers in `routers/`, business logic in `services/`. Talks to the S50 via ALPACA REST (`:32323`) or via `seestar_alp` (`http://seestar-alp:5555`).
 - **`vendor/seestar_alp/`** — git submodule. Don't edit directly; if a bridge change is needed, fork upstream or override via `alp-config/config.toml`.
 - **`portal/clients/`** — long-lived **stateful** socket/session client classes (`AlpacaClient`, `StellariumClient`, `SessionsClient`, `SeestarObserverClient`, `SeestarArchiveClient`, `SeestarImagerClient`) shared between UI and backend. Not "HTTP wrappers to the backend" — those live inline in each view as `requests.*` calls. **Also copied into the `seestar-portal-backend` Docker image** (`portal/backend/Dockerfile` lines ~33-36) — touching `portal/clients/` requires rebuilding both containers, not just the UI. Stale-snapshot bugs from skipping the backend rebuild were tracked in PRs #38/#39/#41.
+- **`portal/auth/`** — Supabase auth layer: `AuthProvider` (SDK wrapper), `ProviderConfig` / `PROVIDERS` list, and `session.py` (`st.session_state` binding). `is_authenticated()` is the single source of truth for gate checks. Auth is **Streamlit-only** — FastAPI at `:8503` has no equivalent guard.
+- **`portal/pages/`** — Full-page views that live outside the main nav tab system: `account.py` is the login/signup/OAuth/account panel, reached when unauthenticated or via the Account nav entry.
 - **`portal/catalog/`** — static Messier / NGC-IC catalogs. Pure data.
 
 ## JOB STATE — NO CONVENTION YET

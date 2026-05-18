@@ -38,7 +38,13 @@ The portal backend talks to the S50 directly at `http://192.168.0.132:32323` (na
 
 | File / Dir | Purpose |
 |------------|---------|
-| `app.py` | Streamlit entry point — page routing |
+| `app.py` | Streamlit entry point — auth gate + page routing |
+| `auth/__init__.py` | Auth package marker |
+| `auth/provider.py` | `AuthProvider` — Supabase SDK wrapper; `sign_in_email`, `sign_in_oauth`, `exchange_code_for_session`, `sign_out`, `reset_password_email`; returns `None`/`False` on all failures |
+| `auth/providers_config.py` | `ProviderConfig` dataclass + `PROVIDERS` list; `get_enabled_providers()` / `get_oauth_providers()` filter helpers |
+| `auth/session.py` | `st.session_state` binding for Supabase JWT; `store_session`, `clear_session`, `get_session`, `is_authenticated`, `current_user_id`, `current_user_email`, `current_user_created_at` |
+| `pages/__init__.py` | Pages package marker |
+| `pages/account.py` | Account page — login/signup/OAuth callback/account info/logout; `render_account()` is the auth-gate landing target |
 | `config.toml` | Runtime config (S50 IP, ports, imaging defaults, site coordinates) |
 | `config_loader.py` | TOML config loader with env-var overrides |
 | `requirements.txt` | Python dependencies |
@@ -113,6 +119,10 @@ All env vars override their `config.toml` counterparts.
 | `SITE_LON` | `-123.45` | Observing site longitude (°E positive) |
 | `SITE_ELEVATION_M` | `0.0` | Site elevation in metres |
 | `SITE_NAME` | `My Observatory` | Display name for the site |
+| `SUPABASE_URL` | `""` | Supabase project URL (`https://<ref>.supabase.co`); auth disabled (silent failure) when unset. See `docs/auth-billing-setup.md` §1 |
+| `SUPABASE_ANON_KEY` | `""` | Supabase anon/public key; auth disabled when unset |
+| `SUPABASE_JWT_SECRET` | `""` | JWT secret for server-side token verification (backend only) |
+| `PORTAL_URL` | `http://localhost:8502` | Public base URL of the Streamlit portal; used as OAuth callback redirect root. **Must be set on Jetson** to the Cloudflare public hostname, e.g. `https://<tunnel>.trycloudflare.com` |
 
 ## Stacking Service
 

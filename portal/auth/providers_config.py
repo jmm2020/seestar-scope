@@ -1,8 +1,8 @@
 """Data-driven auth provider list.
 
-v1 providers: email, google (enabled=True).
-v1.1+ providers listed but disabled — set enabled=True to activate
-without touching account.py.
+Add a ProviderConfig entry and set enabled=True to activate a provider
+without touching account.py.  Currently enabled: email, google.
+Disabled (reserved): apple, github.
 """
 
 from dataclasses import dataclass
