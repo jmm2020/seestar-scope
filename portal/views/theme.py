@@ -18,6 +18,7 @@ NAV_ITEMS = {
     "Gallery": "Gallery",
     "Sessions": "Sessions",
     "Settings": "Settings",
+    "Account": "Account",
 }
 
 NAV_ICONS = {
@@ -35,6 +36,7 @@ NAV_ICONS = {
     "Gallery": "\U0001f5bc\ufe0f",  # framed picture
     "Sessions": "\U0001f4cb",  # clipboard
     "Settings": "\u2699\ufe0f",  # gear
+    "Account": "\U0001f464",  # person silhouette
 }
 
 DEVICE_ICONS = {

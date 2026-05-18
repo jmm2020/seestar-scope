@@ -15,6 +15,7 @@ from views.theme import (
     render_connection_status,
     render_nav_radio,
 )
+from auth import session as auth_session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,6 +30,14 @@ st.set_page_config(
 
 # Inject cosmic theme
 inject_cosmic_css()
+
+# --- Auth gate — unauthenticated visitors land on the account page ---
+
+if not auth_session.is_authenticated():
+    from pages.account import render_account
+
+    render_account()
+    st.stop()
 
 # --- Session State Initialization ---
 
@@ -165,3 +174,8 @@ elif page == "Settings":
     from views.settings import render_settings
 
     render_settings(config, alpaca, stellarium)
+
+elif page == "Account":
+    from pages.account import render_account
+
+    render_account()

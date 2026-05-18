@@ -50,6 +50,11 @@ docker compose up -d
 docker compose logs -f
 ```
 
+> **Auth prerequisite**: The portal requires Supabase credentials to log in.
+> Follow `docs/auth-billing-setup.md` §1 to provision a free Supabase project and capture
+> `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_JWT_SECRET`. Without them the
+> login form will appear but all submissions will silently fail.
+
 ## Quick Start — Workstation Dev
 
 ```bash
@@ -62,6 +67,11 @@ cd portal
 pip install -r requirements.txt
 streamlit run app.py --server.port 8502
 ```
+
+> **Auth prerequisite**: The portal requires Supabase credentials to log in.
+> Follow `docs/auth-billing-setup.md` §1 to provision a free Supabase project and capture
+> `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_JWT_SECRET`. Without them the
+> login form will appear but all submissions will silently fail.
 
 ## Quick Start — Jetson Deploy
 

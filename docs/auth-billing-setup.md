@@ -112,6 +112,7 @@ so the FastAPI backend can query a single source of truth.
    SUPABASE_ANON_KEY=<anon-key>
    SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
    SUPABASE_JWT_SECRET=<jwt-secret>
+   PORTAL_URL=https://<your-cloudflare-tunnel-hostname>  # Public URL for OAuth callbacks; default localhost:8502 breaks OAuth on Jetson
    STRIPE_SECRET_KEY=sk_test_<...>
    STRIPE_WEBHOOK_SECRET=whsec_<...>
    STRIPE_WATCH_PRICE_ID=price_<watch>
