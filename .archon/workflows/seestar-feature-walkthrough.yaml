@@ -331,7 +331,7 @@ nodes:
               results.append({'path': path, 'status': 0, 'ms': int((time.time()-t0)*1000), 'error': str(e)[:200]})
       json.dump({'reachable': True, 'backend_base': backend, 'routes': results}, sys.stdout, indent=2)
       PY
-      BACKEND_BASE="$BACKEND_BASE" echo "$OPEN" | BACKEND_BASE="$BACKEND_BASE" python3 /tmp/probe-routes.py > "$OUT"
+      echo "$OPEN" | BACKEND_BASE="$BACKEND_BASE" python3 /tmp/probe-routes.py > "$OUT"
       cat "$OUT"
       exit 0
     depends_on: [probe-stack-health]
