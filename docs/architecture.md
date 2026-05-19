@@ -122,7 +122,12 @@ All env vars override their `config.toml` counterparts.
 | `SUPABASE_URL` | `""` | Supabase project URL (`https://<ref>.supabase.co`); auth disabled (silent failure) when unset. See `docs/auth-billing-setup.md` §1 |
 | `SUPABASE_ANON_KEY` | `""` | Supabase anon/public key; auth disabled when unset |
 | `SUPABASE_JWT_SECRET` | `""` | JWT secret for server-side token verification (backend only) |
-| `PORTAL_URL` | `http://localhost:8502` | Public base URL of the Streamlit portal; used as OAuth callback redirect root. **Must be set on Jetson** to the Cloudflare public hostname, e.g. `https://<tunnel>.trycloudflare.com` |
+| `SUPABASE_SERVICE_ROLE_KEY` | `""` | Supabase service role key; bypasses RLS — backend only. Required by webhook handler to call `auth.admin.update_user_by_id()`. See `docs/auth-billing-setup.md` §1 |
+| `PORTAL_URL` | `http://localhost:8502` | Public base URL of the Streamlit portal; used as OAuth callback redirect root and as the base for Stripe checkout success/cancel URLs and billing portal return URL. **Must be set on Jetson** to the Cloudflare public hostname, e.g. `https://<tunnel>.trycloudflare.com` |
+| `STRIPE_SECRET_KEY` | `""` | Stripe API secret key (`sk_test_...` in test mode). Required for Checkout and Customer Portal session creation. If unset, billing UI degrades silently (all Stripe calls return `None`). |
+| `STRIPE_WEBHOOK_SECRET` | `""` | Stripe webhook signing secret (`whsec_...`). Required for signature validation at `POST /billing/webhook`. If unset, all webhook events are rejected with 503. |
+| `STRIPE_WATCH_PRICE_ID` | `None` | Stripe price ID for the Watch tier (recurring monthly). If unset, the checkout page shows a warning and Subscribe button is suppressed. |
+| `STRIPE_CONTROL_PRICE_ID` | `None` | Stripe price ID for the Control tier (metered hourly). Read by `billing/products.py`; not yet consumed by checkout UI (tracked in issue #62). |
 
 ## Stacking Service
 

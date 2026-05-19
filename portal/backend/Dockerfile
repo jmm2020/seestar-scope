@@ -38,6 +38,9 @@ COPY clients /app/clients
 # Copy shared utils so postprocessing_service can import utils.image_enhancement
 COPY utils /app/utils
 
+# Copy billing module so backend.main can import `from billing import webhook_handler`
+COPY billing /app/billing
+
 # Create data directories
 RUN mkdir -p /app/data /app/captures /app/siril_workdir
 

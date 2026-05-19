@@ -160,4 +160,5 @@ def _render_account_panel() -> None:
             auth_session.clear_session()
             st.rerun()
     with col_b:
-        st.button("Manage Billing", disabled=True, help="Coming soon")
+        if st.button("Manage Billing"):
+            st.switch_page("pages/checkout.py")

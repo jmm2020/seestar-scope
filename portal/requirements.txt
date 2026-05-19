@@ -16,3 +16,4 @@ astroalign>=2.5.1
 lacosmic>=1.1.0
 streamlit-image-comparison>=0.0.4
 supabase>=2.0.0
+stripe>=8.0.0
