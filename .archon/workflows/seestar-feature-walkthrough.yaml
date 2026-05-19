@@ -502,12 +502,12 @@ nodes:
 
       if [ -n "$ISSUE" ]; then
         echo "Commenting on issue #$ISSUE..."
-        gh issue comment "$ISSUE" --repo jmm2020/seestar-scope --body-file "$MD_FILE"
+        gh issue comment "$ISSUE" --repo jmm2020/seestar-scope --body-file "$MD_FILE" || exit $?
       else
         echo "Creating new dated issue..."
         gh issue create --repo jmm2020/seestar-scope \
           --title "Feature walkthrough — $(date -I)" \
-          --body-file "$MD_FILE"
+          --body-file "$MD_FILE" || exit $?
       fi
     depends_on: [synthesize-report]
     trigger_rule: all_done
